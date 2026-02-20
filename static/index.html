@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apollo ✈️</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3d;
+    --accent: #6c8eff;
+    --accent2: #a78bfa;
+    --text: #e8eaf6;
+    --muted: #6b7280;
+    --success: #34d399;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+  header span { font-size: 1.6rem; }
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--surface); padding: 0 24px;
+  }
+  .tab {
+    padding: 12px 20px; cursor: pointer; font-size: 0.9rem;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: all 0.2s; user-select: none;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .panel { display: none; flex: 1; padding: 24px; max-width: 900px; width: 100%; margin: 0 auto; }
+  .panel.active { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .card h3 { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Inputs */
+  input, textarea, select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 10px 14px;
+    font-size: 0.95rem; font-family: inherit; outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 100px; }
+
+  /* Buttons */
+  .btn {
+    padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 0.9rem; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary { background: var(--border); color: var(--text); }
+  .btn-secondary:hover { background: #3a3d5d; }
+  .btn-success { background: var(--success); color: #000; }
+  .btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Row / flex helpers */
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .flex-1 { flex: 1; }
+
+  /* Trip selector */
+  .trip-chip {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border);
+    cursor: pointer; font-size: 0.85rem; transition: all 0.2s; background: var(--bg);
+  }
+  .trip-chip.active { border-color: var(--accent); background: #1e2448; color: var(--accent); }
+  .trip-chip:hover:not(.active) { border-color: var(--muted); }
+  .trip-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+
+  /* Upload area */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 32px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); }
+  .upload-zone p { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+
+  /* Items list */
+  .item-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 0.85rem;
+  }
+  .item-pill .badge {
+    padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+  }
+  .badge-text { background: #1e3a5f; color: #60a5fa; }
+  .badge-image { background: #2d1b4e; color: #a78bfa; }
+  .badge-email { background: #1e3d2f; color: #34d399; }
+
+  /* Itinerary */
+  #itinerary-output {
+    white-space: pre-wrap; line-height: 1.7; font-size: 0.92rem;
+    max-height: 500px; overflow-y: auto;
+  }
+  #itinerary-output h1, #itinerary-output h2, #itinerary-output h3 {
+    color: var(--accent); margin: 12px 0 6px;
+  }
+  #itinerary-output strong { color: var(--accent2); }
+
+  /* Chat */
+  #chat-messages {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 12px; padding: 4px 0; min-height: 300px; max-height: 480px;
+  }
+  .msg {
+    max-width: 75%; padding: 12px 16px; border-radius: 12px;
+    font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap;
+  }
+  .msg-user {
+    align-self: flex-end; background: var(--accent); color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-assistant {
+    align-self: flex-start; background: var(--surface); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .msg-assistant strong { color: var(--accent2); }
+  .geo-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.78rem; color: var(--success); cursor: pointer;
+    padding: 4px 10px; border: 1px solid var(--success); border-radius: 20px;
+  }
+  .geo-badge.off { color: var(--muted); border-color: var(--muted); }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 12px 20px; border-radius: 10px; font-size: 0.88rem;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
+  }
+  #toast.show { opacity: 1; }
+  .spinner { display: inline-block; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span>✈️</span>
+  <h1>Apollo</h1>
+  <span style="margin-left:auto;font-size:0.8rem;color:var(--muted)">AI Travel Planner</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('vault')">📁 Vault</div>
+  <div class="tab" onclick="switchTab('itinerary')">🗺️ Itinerary</div>
+  <div class="tab" onclick="switchTab('chat')">💬 Chat</div>
+</div>
+
+<!-- VAULT TAB -->
+<div class="panel active" id="tab-vault">
+  <div class="card">
+    <h3>Trips</h3>
+    <div class="row">
+      <input type="text" id="new-trip-name" placeholder="Trip name (e.g. Tokyo 2025)" class="flex-1" />
+      <button class="btn btn-primary" onclick="createTrip()">+ New Trip</button>
+    </div>
+    <div class="trip-list" id="trip-list" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" id="upload-card" style="display:none">
+    <h3>Add Content</h3>
+    <div style="margin-bottom:12px">
+      <label style="font-size:0.85rem;color:var(--muted)">Content type</label>
+      <div class="row" style="margin-top:6px">
+        <button class="btn btn-sm btn-secondary" id="type-text" onclick="setType('text')">📝 Note</button>
+        <button class="btn btn-sm btn-secondary" id="type-email" onclick="setType('email')">📧 Email</button>
+        <button class="btn btn-sm btn-secondary" id="type-image" onclick="setType('image')">🖼️ Screenshot</button>
+      </div>
+    </div>
+    <input type="text" id="upload-label" placeholder="Label (optional, e.g. 'Hotel confirmation')" style="margin-bottom:10px" />
+    <div id="text-input-area">
+      <textarea id="upload-text" placeholder="Paste your notes, email, or travel details here..."></textarea>
+    </div>
+    <div id="image-input-area" style="display:none">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           ondrop="handleDrop(event)">
+        <div style="font-size:2rem">🖼️</div>
+        <p>Click to select or drag & drop a screenshot</p>
+        <p id="selected-file" style="color:var(--accent);margin-top:6px"></p>
+      </div>
+      <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFileSelect(this)" />
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn btn-primary flex-1" onclick="uploadContent()">Add to Trip</button>
+    </div>
+  </div>
+
+  <div class="card" id="items-card" style="display:none">
+    <h3>Saved Content</h3>
+    <div id="items-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+
+<!-- ITINERARY TAB -->
+<div class="panel" id="tab-itinerary">
+  <div class="card">
+    <h3>Select Trip</h3>
+    <div class="trip-list" id="itinerary-trip-list"></div>
+  </div>
+  <div class="card" id="itinerary-card" style="display:none">
+    <div class="row" style="margin-bottom:14px">
+      <h3 id="itinerary-trip-name" style="flex:1;text-transform:none;color:var(--text)">Itinerary</h3>
+      <button class="btn btn-primary btn-sm" onclick="organizeTrip()" id="organize-btn">
+        ✨ Organize with AI
+      </button>
+    </div>
+    <div id="itinerary-output" style="color:var(--muted);font-style:italic">
+      Click "Organize with AI" to generate your itinerary from saved content.
+    </div>
+  </div>
+</div>
+
+<!-- CHAT TAB -->
+<div class="panel" id="tab-chat">
+  <div class="card" style="flex:1;display:flex;flex-direction:column;gap:12px">
+    <div class="row">
+      <div class="flex-1">
+        <label style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;display:block">Active trip context</label>
+        <select id="chat-trip-select" onchange="setChatTrip(this.value)">
+          <option value="">— No trip selected —</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;display:block">Location</label>
+        <div class="geo-badge off" id="geo-badge" onclick="toggleGeo()">
+          📍 Off
+        </div>
+      </div>
+    </div>
+    <div id="chat-messages"></div>
+    <div class="row" style="gap:8px">
+      <input type="text" id="chat-input" class="flex-1" placeholder="Ask anything about your trip..." onkeydown="if(event.key==='Enter')sendMessage()" />
+      <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let trips = [];
+let selectedTripId = null;
+let itineraryTripId = null;
+let chatTripId = null;
+let selectedFile = null;
+let uploadType = 'text';
+let geoEnabled = false;
+let geoCoords = null;
+let chatHistory = [];
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+async function init() {
+  await loadTrips();
+}
+
+async function loadTrips() {
+  const res = await fetch('/api/trips');
+  const data = await res.json();
+  trips = data.trips;
+  renderTripChips();
+  renderItineraryTripChips();
+  renderChatTripSelect();
+}
+
+// ---------------------------------------------------------------------------
+// Tab switching
+// ---------------------------------------------------------------------------
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['vault','itinerary','chat'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ---------------------------------------------------------------------------
+// Trips
+// ---------------------------------------------------------------------------
+async function createTrip() {
+  const name = document.getElementById('new-trip-name').value.trim();
+  if (!name) return toast('Enter a trip name');
+  const res = await fetch('/api/trips', { method: 'POST', body: new URLSearchParams({ name }) });
+  const trip = await res.json();
+  await loadTrips();
+  selectTrip(trip.id);
+  document.getElementById('new-trip-name').value = '';
+  toast(`Trip "${name}" created!`);
+}
+
+function selectTrip(id) {
+  selectedTripId = id;
+  renderTripChips();
+  renderItems();
+  document.getElementById('upload-card').style.display = 'block';
+  document.getElementById('items-card').style.display = 'block';
+}
+
+function renderTripChips() {
+  const el = document.getElementById('trip-list');
+  el.innerHTML = trips.map(t => `
+    <div class="trip-chip ${t.id === selectedTripId ? 'active' : ''}" onclick="selectTrip('${t.id}')">
+      ${t.name}
+    </div>
+  `).join('');
+}
+
+function renderItineraryTripChips() {
+  const el = document.getElementById('itinerary-trip-list');
+  el.innerHTML = trips.map(t => `
+    <div class="trip-chip ${t.id === itineraryTripId ? 'active' : ''}" onclick="selectItineraryTrip('${t.id}')">
+      ${t.name}
+    </div>
+  `).join('');
+}
+
+function selectItineraryTrip(id) {
+  itineraryTripId = id;
+  renderItineraryTripChips();
+  const trip = trips.find(t => t.id === id);
+  document.getElementById('itinerary-card').style.display = 'block';
+  document.getElementById('itinerary-trip-name').textContent = trip.name;
+  if (trip.itinerary) {
+    renderItinerary(trip.itinerary);
+  } else {
+    document.getElementById('itinerary-output').innerHTML =
+      '<span style="color:var(--muted);font-style:italic">Click "Organize with AI" to generate your itinerary.</span>';
+  }
+}
+
+function renderChatTripSelect() {
+  const sel = document.getElementById('chat-trip-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— No trip selected —</option>' +
+    trips.map(t => `<option value="${t.id}" ${t.id===cur?'selected':''}>${t.name}</option>`).join('');
+}
+
+function setChatTrip(id) { chatTripId = id || null; }
+
+// ---------------------------------------------------------------------------
+// Upload content
+// ---------------------------------------------------------------------------
+function setType(type) {
+  uploadType = type;
+  ['text','email','image'].forEach(t => {
+    document.getElementById(`type-${t}`).classList.toggle('btn-primary', t === type);
+    document.getElementById(`type-${t}`).classList.toggle('btn-secondary', t !== type);
+  });
+  document.getElementById('text-input-area').style.display = type !== 'image' ? 'block' : 'none';
+  document.getElementById('image-input-area').style.display = type === 'image' ? 'block' : 'none';
+}
+
+function handleFileSelect(input) {
+  selectedFile = input.files[0];
+  document.getElementById('selected-file').textContent = selectedFile ? selectedFile.name : '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  selectedFile = e.dataTransfer.files[0];
+  document.getElementById('selected-file').textContent = selectedFile ? selectedFile.name : '';
+}
+
+async function uploadContent() {
+  if (!selectedTripId) return toast('Select a trip first');
+  const label = document.getElementById('upload-label').value.trim();
+  const fd = new FormData();
+  fd.append('content_type', uploadType);
+  fd.append('label', label);
+
+  if (uploadType === 'image') {
+    if (!selectedFile) return toast('Select an image first');
+    fd.append('file', selectedFile);
+  } else {
+    const text = document.getElementById('upload-text').value.trim();
+    if (!text) return toast('Enter some content');
+    fd.append('text', text);
+  }
+
+  toast('Uploading...');
+  const res = await fetch(`/api/trips/${selectedTripId}/upload`, { method: 'POST', body: fd });
+  if (!res.ok) { toast('Upload failed'); return; }
+
+  await loadTrips();
+  renderItems();
+  document.getElementById('upload-text').value = '';
+  document.getElementById('upload-label').value = '';
+  selectedFile = null;
+  document.getElementById('selected-file').textContent = '';
+  document.getElementById('file-input').value = '';
+  toast('Content added!');
+}
+
+function renderItems() {
+  const trip = trips.find(t => t.id === selectedTripId);
+  if (!trip) return;
+  const el = document.getElementById('items-list');
+  if (!trip.items.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem">No content yet. Add notes, emails, or screenshots above.</p>';
+    return;
+  }
+  el.innerHTML = trip.items.map(item => {
+    const typeLabel = { text: '📝', email: '📧', image: '🖼️' }[item.type] || '📄';
+    const badgeClass = { text: 'badge-text', email: 'badge-email', image: 'badge-image' }[item.type] || '';
+    const desc = item.filename || (item.content || '').slice(0, 60) + (item.content?.length > 60 ? '...' : '');
+    return `
+      <div class="item-pill">
+        <span class="badge ${badgeClass}">${typeLabel} ${item.type}</span>
+        <span style="flex:1;color:var(--muted)">${item.label ? `<strong style="color:var(--text)">${item.label}</strong> — ` : ''}${desc}</span>
+      </div>`;
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Organize itinerary
+// ---------------------------------------------------------------------------
+async function organizeTrip() {
+  if (!itineraryTripId) return toast('Select a trip first');
+  const btn = document.getElementById('organize-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner">⟳</span> Organizing…';
+  document.getElementById('itinerary-output').innerHTML =
+    '<span style="color:var(--muted)">Claude is reading your content and building your itinerary…</span>';
+
+  const res = await fetch(`/api/trips/${itineraryTripId}/organize`, { method: 'POST' });
+  btn.disabled = false;
+  btn.innerHTML = '✨ Organize with AI';
+
+  if (!res.ok) {
+    const err = await res.json();
+    toast(err.detail || 'Failed to organize');
+    return;
+  }
+  const data = await res.json();
+  await loadTrips();
+  renderItinerary(data.itinerary);
+}
+
+function renderItinerary(text) {
+  // Simple markdown-lite rendering
+  let html = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  document.getElementById('itinerary-output').innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Geo-awareness
+// ---------------------------------------------------------------------------
+function toggleGeo() {
+  if (!geoEnabled) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      geoCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      geoEnabled = true;
+      document.getElementById('geo-badge').className = 'geo-badge';
+      document.getElementById('geo-badge').textContent = `📍 ${geoCoords.lat.toFixed(3)}, ${geoCoords.lng.toFixed(3)}`;
+      toast('Location enabled');
+    }, () => toast('Location access denied'));
+  } else {
+    geoEnabled = false;
+    geoCoords = null;
+    document.getElementById('geo-badge').className = 'geo-badge off';
+    document.getElementById('geo-badge').textContent = '📍 Off';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendMessage('user', text);
+
+  const fd = new FormData();
+  fd.append('message', text);
+  fd.append('history', JSON.stringify(chatHistory));
+  if (chatTripId) fd.append('trip_id', chatTripId);
+  if (geoEnabled && geoCoords) {
+    fd.append('latitude', geoCoords.lat);
+    fd.append('longitude', geoCoords.lng);
+  }
+
+  const assistantDiv = appendMessage('assistant', '');
+  let fullText = '';
+
+  const res = await fetch('/api/chat', { method: 'POST', body: fd });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const lines = decoder.decode(value).split('\n');
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6);
+      if (payload === '[DONE]') break;
+      try {
+        const chunk = JSON.parse(payload);
+        fullText += chunk.text;
+        assistantDiv.innerHTML = renderMd(fullText);
+        scrollChat();
+      } catch {}
+    }
+  }
+
+  chatHistory.push({ role: 'user', content: text });
+  chatHistory.push({ role: 'assistant', content: fullText });
+  // Keep last 20 messages to avoid context bloat
+  if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+}
+
+function appendMessage(role, text) {
+  const el = document.createElement('div');
+  el.className = `msg msg-${role}`;
+  el.innerHTML = renderMd(text) || '&nbsp;';
+  document.getElementById('chat-messages').appendChild(el);
+  scrollChat();
+  return el;
+}
+
+function scrollChat() {
+  const c = document.getElementById('chat-messages');
+  c.scrollTop = c.scrollHeight;
+}
+
+function renderMd(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+}
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+function toast(msg, duration=2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+setType('text');
+init();
+</script>
+</body>
+</html>
