@@ -3,9 +3,12 @@ import json
 import uuid
 import base64
 import asyncio
+import re
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import anthropic
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -36,6 +39,44 @@ def load_index() -> dict:
 
 def save_index(index: dict):
     INDEX_FILE.write_text(json.dumps(index, indent=2))
+
+
+class _TextExtractor(HTMLParser):
+    """Strip HTML tags and return plain text."""
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+        self._skip = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "nav", "footer", "header"):
+            self._skip = True
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "nav", "footer", "header"):
+            self._skip = False
+        if tag in ("p", "br", "div", "li", "h1", "h2", "h3", "h4", "tr"):
+            self._parts.append("\n")
+
+    def handle_data(self, data):
+        if not self._skip:
+            self._parts.append(data)
+
+    def get_text(self):
+        text = "".join(self._parts)
+        # Collapse excessive whitespace
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+
+async def fetch_url_text(url: str) -> str:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; Apollo-Travel/1.0)"}
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        parser = _TextExtractor()
+        parser.feed(resp.text)
+        return parser.get_text()
 
 
 def get_client() -> anthropic.Anthropic:
@@ -77,8 +118,9 @@ async def create_trip(name: str = Form(...)):
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
     trip_id: str,
-    content_type: str = Form(...),  # "text" | "image" | "email"
+    content_type: str = Form(...),  # "text" | "image" | "email" | "link"
     text: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     label: Optional[str] = Form(None),
 ):
@@ -91,6 +133,17 @@ async def upload_content(
 
     if content_type == "text" or content_type == "email":
         item["content"] = text
+        item["file_id"] = None
+
+    elif content_type == "link":
+        if not url:
+            raise HTTPException(status_code=400, detail="No URL provided")
+        try:
+            page_text = await fetch_url_text(url)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not fetch URL: {e}")
+        item["url"] = url
+        item["content"] = f"Source: {url}\n\n{page_text[:8000]}"  # cap at 8k chars
         item["file_id"] = None
 
     elif content_type == "image":

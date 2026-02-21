@@ -106,6 +106,7 @@
   .badge-text { background: #1e3a5f; color: #60a5fa; }
   .badge-image { background: #2d1b4e; color: #a78bfa; }
   .badge-email { background: #1e3d2f; color: #34d399; }
+  .badge-link { background: #2d2510; color: #fbbf24; }
 
   /* Itinerary */
   #itinerary-output {
@@ -187,11 +188,16 @@
         <button class="btn btn-sm btn-secondary" id="type-text" onclick="setType('text')">📝 Note</button>
         <button class="btn btn-sm btn-secondary" id="type-email" onclick="setType('email')">📧 Email</button>
         <button class="btn btn-sm btn-secondary" id="type-image" onclick="setType('image')">🖼️ Screenshot</button>
+        <button class="btn btn-sm btn-secondary" id="type-link" onclick="setType('link')">🔗 Link</button>
       </div>
     </div>
     <input type="text" id="upload-label" placeholder="Label (optional, e.g. 'Hotel confirmation')" style="margin-bottom:10px" />
     <div id="text-input-area">
       <textarea id="upload-text" placeholder="Paste your notes, email, or travel details here..."></textarea>
+    </div>
+    <div id="link-input-area" style="display:none">
+      <input type="url" id="upload-url" placeholder="https://..." />
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:6px">Apollo will fetch and save the page content for AI use.</p>
     </div>
     <div id="image-input-area" style="display:none">
       <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
@@ -370,12 +376,13 @@ function setChatTrip(id) { chatTripId = id || null; }
 // ---------------------------------------------------------------------------
 function setType(type) {
   uploadType = type;
-  ['text','email','image'].forEach(t => {
+  ['text','email','image','link'].forEach(t => {
     document.getElementById(`type-${t}`).classList.toggle('btn-primary', t === type);
     document.getElementById(`type-${t}`).classList.toggle('btn-secondary', t !== type);
   });
-  document.getElementById('text-input-area').style.display = type !== 'image' ? 'block' : 'none';
+  document.getElementById('text-input-area').style.display = (type === 'text' || type === 'email') ? 'block' : 'none';
   document.getElementById('image-input-area').style.display = type === 'image' ? 'block' : 'none';
+  document.getElementById('link-input-area').style.display = type === 'link' ? 'block' : 'none';
 }
 
 function handleFileSelect(input) {
@@ -400,6 +407,11 @@ async function uploadContent() {
   if (uploadType === 'image') {
     if (!selectedFile) return toast('Select an image first');
     fd.append('file', selectedFile);
+  } else if (uploadType === 'link') {
+    const url = document.getElementById('upload-url').value.trim();
+    if (!url) return toast('Enter a URL');
+    fd.append('url', url);
+    toast('Fetching page…');
   } else {
     const text = document.getElementById('upload-text').value.trim();
     if (!text) return toast('Enter some content');
@@ -414,6 +426,7 @@ async function uploadContent() {
   renderItems();
   document.getElementById('upload-text').value = '';
   document.getElementById('upload-label').value = '';
+  document.getElementById('upload-url').value = '';
   selectedFile = null;
   document.getElementById('selected-file').textContent = '';
   document.getElementById('file-input').value = '';
@@ -429,9 +442,9 @@ function renderItems() {
     return;
   }
   el.innerHTML = trip.items.map(item => {
-    const typeLabel = { text: '📝', email: '📧', image: '🖼️' }[item.type] || '📄';
-    const badgeClass = { text: 'badge-text', email: 'badge-email', image: 'badge-image' }[item.type] || '';
-    const desc = item.filename || (item.content || '').slice(0, 60) + (item.content?.length > 60 ? '...' : '');
+    const typeLabel = { text: '📝', email: '📧', image: '🖼️', link: '🔗' }[item.type] || '📄';
+    const badgeClass = { text: 'badge-text', email: 'badge-email', image: 'badge-image', link: 'badge-link' }[item.type] || '';
+    const desc = item.url || item.filename || (item.content || '').slice(0, 60) + (item.content?.length > 60 ? '...' : '');
     return `
       <div class="item-pill">
         <span class="badge ${badgeClass}">${typeLabel} ${item.type}</span>
