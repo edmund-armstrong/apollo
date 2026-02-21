@@ -11,9 +11,13 @@ from typing import Optional
 import httpx
 import anthropic
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 load_dotenv()
 
@@ -29,6 +33,64 @@ UPLOADS_DIR = STORAGE_DIR / "uploads"
 INDEX_FILE = STORAGE_DIR / "index.json"
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+GMAIL_TOKEN_FILE = STORAGE_DIR / "gmail_token.json"
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+GMAIL_REDIRECT_URI = "http://localhost:8000/api/auth/gmail/callback"
+
+
+def gmail_flow() -> Flow:
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="Google credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env")
+    return Flow.from_client_config(
+        {"web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [GMAIL_REDIRECT_URI],
+        }},
+        scopes=GMAIL_SCOPES,
+        redirect_uri=GMAIL_REDIRECT_URI,
+    )
+
+
+def get_gmail_service():
+    if not GMAIL_TOKEN_FILE.exists():
+        raise HTTPException(status_code=401, detail="Gmail not connected")
+    token_data = json.loads(GMAIL_TOKEN_FILE.read_text())
+    creds = Credentials(
+        token=token_data["token"],
+        refresh_token=token_data.get("refresh_token"),
+        token_uri=token_data["token_uri"],
+        client_id=token_data["client_id"],
+        client_secret=token_data["client_secret"],
+        scopes=token_data["scopes"],
+    )
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        token_data["token"] = creds.token
+        GMAIL_TOKEN_FILE.write_text(json.dumps(token_data))
+    return build("gmail", "v1", credentials=creds)
+
+
+def extract_gmail_body(payload: dict) -> str:
+    """Recursively extract plain text from a Gmail message payload."""
+    import base64
+    data = payload.get("body", {}).get("data")
+    if data:
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+    for part in payload.get("parts", []):
+        if part.get("mimeType") == "text/plain":
+            data = part.get("body", {}).get("data")
+            if data:
+                return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+        nested = extract_gmail_body(part)
+        if nested:
+            return nested
+    return ""
 
 
 def load_index() -> dict:
@@ -285,6 +347,101 @@ async def chat(
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Gmail routes
+# ---------------------------------------------------------------------------
+
+@app.get("/api/auth/gmail")
+async def gmail_auth():
+    flow = gmail_flow()
+    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+    return RedirectResponse(auth_url)
+
+
+@app.get("/api/auth/gmail/callback")
+async def gmail_callback(code: str):
+    flow = gmail_flow()
+    flow.fetch_token(code=code)
+    creds = flow.credentials
+    GMAIL_TOKEN_FILE.write_text(json.dumps({
+        "token": creds.token,
+        "refresh_token": creds.refresh_token,
+        "token_uri": creds.token_uri,
+        "client_id": creds.client_id,
+        "client_secret": creds.client_secret,
+        "scopes": list(creds.scopes) if creds.scopes else GMAIL_SCOPES,
+    }))
+    return RedirectResponse("/?gmail=connected")
+
+
+@app.get("/api/auth/gmail/status")
+async def gmail_status():
+    return {"connected": GMAIL_TOKEN_FILE.exists()}
+
+
+@app.post("/api/email/scan")
+async def scan_emails(trip_id: str = Form(...), keywords: str = Form(...)):
+    index = load_index()
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    service = get_gmail_service()
+
+    # Build Gmail search query from comma-separated keywords
+    terms = [k.strip() for k in keywords.split(",") if k.strip()]
+    query = " OR ".join(terms)
+
+    results = service.users().messages().list(
+        userId="me", q=query, maxResults=25
+    ).execute()
+
+    messages = results.get("messages", [])
+    if not messages:
+        return {"emails": []}
+
+    emails = []
+    for msg in messages[:25]:
+        msg_data = service.users().messages().get(
+            userId="me", id=msg["id"], format="full"
+        ).execute()
+        headers = {h["name"]: h["value"] for h in msg_data["payload"]["headers"]}
+        emails.append({
+            "id": msg["id"],
+            "subject": headers.get("Subject", "(no subject)"),
+            "sender": headers.get("From", ""),
+            "date": headers.get("Date", ""),
+            "snippet": msg_data.get("snippet", ""),
+            "body": extract_gmail_body(msg_data["payload"])[:3000],
+        })
+
+    return {"emails": emails}
+
+
+@app.post("/api/email/add")
+async def add_email_to_trip(
+    trip_id: str = Form(...),
+    subject: str = Form(...),
+    sender: str = Form(...),
+    date: str = Form(...),
+    body: str = Form(...),
+):
+    index = load_index()
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    item = {
+        "id": str(uuid.uuid4())[:8],
+        "type": "email",
+        "label": subject,
+        "content": f"From: {sender}\nDate: {date}\nSubject: {subject}\n\n{body}",
+        "file_id": None,
+    }
+    index["trips"][trip_id]["items"].append(item)
+    index["trips"][trip_id]["itinerary"] = None
+    save_index(index)
+    return {"ok": True, "item": item}
 
 
 # ---------------------------------------------------------------------------

@@ -165,6 +165,7 @@
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('vault')">📁 Vault</div>
+  <div class="tab" onclick="switchTab('gmail')">📧 Gmail</div>
   <div class="tab" onclick="switchTab('itinerary')">🗺️ Itinerary</div>
   <div class="tab" onclick="switchTab('chat')">💬 Chat</div>
 </div>
@@ -218,6 +219,47 @@
   <div class="card" id="items-card" style="display:none">
     <h3>Saved Content</h3>
     <div id="items-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+
+<!-- GMAIL TAB -->
+<div class="panel" id="tab-gmail">
+  <div class="card" id="gmail-connect-card">
+    <h3>Gmail</h3>
+    <div id="gmail-disconnected">
+      <p style="color:var(--muted);font-size:0.9rem;margin-bottom:14px">
+        Connect your Gmail to let Apollo scan for travel-related emails and add them directly to your trips.
+      </p>
+      <a href="/api/auth/gmail" class="btn btn-primary" style="text-decoration:none;display:inline-block">
+        🔗 Connect Gmail
+      </a>
+    </div>
+    <div id="gmail-connected" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="color:var(--success);font-size:1.2rem">✓</span>
+        <span style="color:var(--success);font-weight:600">Gmail connected</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="gmail-scan-card" style="display:none">
+    <h3>Search Emails</h3>
+    <div style="margin-bottom:10px">
+      <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:4px">Add to trip</label>
+      <select id="gmail-trip-select">
+        <option value="">— Select a trip —</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:4px">Keywords (comma-separated)</label>
+      <input type="text" id="gmail-keywords" placeholder="e.g. hotel, booking, flight, reservation, Airbnb" />
+    </div>
+    <button class="btn btn-primary" onclick="scanGmail()" id="scan-btn">🔍 Search Inbox</button>
+  </div>
+
+  <div class="card" id="gmail-results-card" style="display:none">
+    <h3>Matching Emails <span id="email-count" style="color:var(--muted);font-weight:400"></span></h3>
+    <div id="email-results" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 
@@ -302,10 +344,11 @@ async function loadTrips() {
 // ---------------------------------------------------------------------------
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', ['vault','itinerary','chat'][i] === name);
+    t.classList.toggle('active', ['vault','gmail','itinerary','chat'][i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'gmail') checkGmailStatus();
 }
 
 // ---------------------------------------------------------------------------
@@ -590,10 +633,112 @@ function toast(msg, duration=2500) {
 }
 
 // ---------------------------------------------------------------------------
+// Gmail
+// ---------------------------------------------------------------------------
+let gmailConnected = false;
+
+async function checkGmailStatus() {
+  const res = await fetch('/api/auth/gmail/status');
+  const data = await res.json();
+  gmailConnected = data.connected;
+  document.getElementById('gmail-disconnected').style.display = gmailConnected ? 'none' : 'block';
+  document.getElementById('gmail-connected').style.display = gmailConnected ? 'block' : 'none';
+  document.getElementById('gmail-scan-card').style.display = gmailConnected ? 'block' : 'none';
+  renderGmailTripSelect();
+}
+
+function renderGmailTripSelect() {
+  const sel = document.getElementById('gmail-trip-select');
+  sel.innerHTML = '<option value="">— Select a trip —</option>' +
+    trips.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+}
+
+async function scanGmail() {
+  const tripId = document.getElementById('gmail-trip-select').value;
+  const keywords = document.getElementById('gmail-keywords').value.trim();
+  if (!tripId) return toast('Select a trip first');
+  if (!keywords) return toast('Enter at least one keyword');
+
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner">⟳</span> Searching…';
+  document.getElementById('gmail-results-card').style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('trip_id', tripId);
+  fd.append('keywords', keywords);
+
+  const res = await fetch('/api/email/scan', { method: 'POST', body: fd });
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Search Inbox';
+
+  if (!res.ok) { toast('Scan failed'); return; }
+  const data = await res.json();
+
+  const emails = data.emails;
+  document.getElementById('email-count').textContent = `(${emails.length} found)`;
+  document.getElementById('gmail-results-card').style.display = 'block';
+
+  if (!emails.length) {
+    document.getElementById('email-results').innerHTML =
+      '<p style="color:var(--muted);font-size:0.88rem">No emails matched. Try different keywords.</p>';
+    return;
+  }
+
+  document.getElementById('email-results').innerHTML = emails.map(email => `
+    <div class="card" style="padding:14px;gap:6px;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-weight:600;font-size:0.9rem">${escHtml(email.subject)}</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">${escHtml(email.sender)} &middot; ${escHtml(email.date)}</div>
+        </div>
+        <button class="btn btn-sm btn-primary" style="white-space:nowrap"
+          onclick="addEmailToTrip('${tripId}', ${JSON.stringify(email.subject).replace(/'/g,"&#39;")}, ${JSON.stringify(email.sender).replace(/'/g,"&#39;")}, ${JSON.stringify(email.date).replace(/'/g,"&#39;")}, ${JSON.stringify(email.body).replace(/'/g,"&#39;")}, this)">
+          + Add
+        </button>
+      </div>
+      <div style="font-size:0.83rem;color:var(--muted);line-height:1.5">${escHtml(email.snippet)}</div>
+    </div>
+  `).join('');
+}
+
+async function addEmailToTrip(tripId, subject, sender, date, body, btn) {
+  btn.disabled = true;
+  btn.textContent = '✓';
+  const fd = new FormData();
+  fd.append('trip_id', tripId);
+  fd.append('subject', subject);
+  fd.append('sender', sender);
+  fd.append('date', date);
+  fd.append('body', body);
+  const res = await fetch('/api/email/add', { method: 'POST', body: fd });
+  if (res.ok) {
+    btn.textContent = '✓ Added';
+    btn.classList.replace('btn-primary', 'btn-secondary');
+    await loadTrips();
+    toast('Email added to trip!');
+  } else {
+    btn.disabled = false;
+    btn.textContent = '+ Add';
+    toast('Failed to add email');
+  }
+}
+
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 setType('text');
 init();
+
+// Check if returning from Gmail OAuth
+if (new URLSearchParams(location.search).get('gmail') === 'connected') {
+  toast('Gmail connected!');
+  history.replaceState({}, '', '/');
+}
 </script>
 </body>
 </html>

@@ -4,3 +4,6 @@ uvicorn>=0.30.0
 python-multipart>=0.0.9
 aiofiles>=24.1.0
 python-dotenv>=1.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.0.0
