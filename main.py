@@ -219,7 +219,14 @@ _LINK_EXTRACTION_SCHEMA = {
         "rating":        {"type": "string"},
         "notes":         {"type": "string"},
     },
-    "required": ["status", "title", "category", "summary"],
+    # output_config structured outputs require ALL properties in "required"
+    "required": [
+        "status", "title", "category", "summary",
+        "address", "city", "country", "price",
+        "check_in", "check_out", "hours", "phone",
+        "cuisine", "airline", "flight_number",
+        "departure", "arrival", "rating", "notes",
+    ],
     "additionalProperties": False,
 }
 
