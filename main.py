@@ -142,14 +142,37 @@ async def fetch_url_text(url: str) -> str:
         return parser.get_text()
 
 
+_FETCH_UA_LIST = [
+    # Many CDNs (Akamai, Cloudflare) explicitly allow known search crawlers
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    # Standard browser UA as second attempt
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    # Bare curl as last resort
+    "curl/7.88.1",
+]
+
+
 def _fetch_url_text_sync(url: str) -> str:
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; Apollo-Travel/1.0)"}
-    with httpx.Client(follow_redirects=True, timeout=15) as client:
-        resp = client.get(url, headers=headers)
-        resp.raise_for_status()
-        parser = _TextExtractor()
-        parser.feed(resp.text)
-        return parser.get_text()
+    last_exc: Exception = RuntimeError("No UA succeeded")
+    for ua in _FETCH_UA_LIST:
+        try:
+            headers = {
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            with httpx.Client(follow_redirects=True, timeout=15) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                parser = _TextExtractor()
+                parser.feed(resp.text)
+                text = parser.get_text()
+                if len(text.strip()) >= 80:
+                    return text
+                # Content too sparse — try next UA before giving up
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc
 
 
 def _url_to_title(url: str) -> str:
