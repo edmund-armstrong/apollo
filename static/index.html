@@ -507,11 +507,16 @@ async function addCapture() {
   const btn = document.getElementById('add-btn');
   btn.disabled = true;
 
-  // Auto-detect URL
-  const isUrl = /^https?:\/\/\S+$/.test(raw);
+  // Auto-detect URL — also handle bare domain/path URLs (no https://)
+  const URL_FULL = /^https?:\/\/\S+$/;
+  const URL_BARE = /^(?:www\.)?\S+\.[a-z]{2,}\/\S+$/i;
+  let linkUrl = raw;
+  if (!URL_FULL.test(raw) && URL_BARE.test(raw)) linkUrl = 'https://' + raw;
+  const isUrl = URL_FULL.test(linkUrl);
+
   const fd = new FormData();
   fd.append('content_type', isUrl ? 'link' : 'text');
-  if (isUrl) fd.append('url', raw);
+  if (isUrl) fd.append('url', linkUrl);
   else fd.append('text', raw);
 
   const res = await fetch(`/api/trips/${activeTripId}/upload`, { method: 'POST', body: fd });
