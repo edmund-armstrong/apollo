@@ -132,6 +132,16 @@
   }
   .feed-url { font-size: 0.8rem; color: var(--accent); }
 
+  /* ── Link extraction ── */
+  .link-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+  .link-summary { font-size: 0.82rem; color: var(--muted); line-height: 1.4; margin-top: 2px; }
+  .link-pending { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .link-warn { font-size: 0.79rem; color: var(--warn); margin-top: 3px; }
+  .link-expand { font-size: 0.74rem; color: var(--accent); cursor: pointer; margin-top: 5px; display: inline-block; user-select: none; }
+  .link-expanded { display: none; margin-top: 7px; border-top: 1px solid var(--border); padding-top: 7px; }
+  .link-expanded.open { display: block; }
+  .detail-line { font-size: 0.78rem; color: var(--muted); padding: 1px 0; }
+
   /* ── Empty state ── */
   .empty-notebook {
     flex: 1; display: flex; flex-direction: column;
@@ -383,6 +393,7 @@ let geoEnabled = false;
 let geoCoords = null;
 let chatHistory = [];
 let recognition = null;
+let pollTimer = null;
 
 // ─────────────────────────────────────────────────
 // Boot
@@ -490,8 +501,6 @@ async function addCapture() {
   if (isUrl) fd.append('url', raw);
   else fd.append('text', raw);
 
-  if (isUrl) toast('Fetching page…');
-
   const res = await fetch(`/api/trips/${activeTripId}/upload`, { method: 'POST', body: fd });
   btn.disabled = false;
 
@@ -500,6 +509,7 @@ async function addCapture() {
     return;
   }
   textarea.value = '';
+  if (isUrl) toast('Link saved — extracting details…');
   await loadTrips();
   renderFeed();
 }
@@ -576,6 +586,74 @@ function toggleVoice() {
 // ─────────────────────────────────────────────────
 // Feed
 // ─────────────────────────────────────────────────
+const CAT_ICONS = { hotel:'🏨', restaurant:'🍽️', flight:'✈️', attraction:'🎯', transport:'🚌', other:'🔗' };
+
+function shortUrl(url) {
+  try { return new URL(url).hostname.replace(/^www\./,'') + new URL(url).pathname.replace(/\/$/,'').slice(0,40); }
+  catch { return url.slice(0,55); }
+}
+
+function renderLinkItem(item) {
+  const ext = item.extraction || {};
+  const status = ext.status || 'pending';
+  const icon = CAT_ICONS[ext.category] || '🔗';
+  const urlShort = escHtml(shortUrl(item.url || ''));
+
+  if (status === 'pending') {
+    return `<div class="feed-item">
+      <div class="feed-icon">🔗</div>
+      <div class="feed-content">
+        <div class="feed-url">${urlShort}</div>
+        <div class="link-pending"><span class="spinner">⟳</span> Extracting details…</div>
+      </div>
+    </div>`;
+  }
+
+  if (status === 'inaccessible' || status === 'failed') {
+    const msg = status === 'inaccessible'
+      ? 'Behind login or paywall — paste content manually'
+      : 'Could not extract details — raw URL saved';
+    return `<div class="feed-item">
+      <div class="feed-icon">🔗</div>
+      <div class="feed-content">
+        <div class="link-title">${escHtml(ext.title || urlShort)}</div>
+        <div class="feed-url">${urlShort}</div>
+        <div class="link-warn">⚠️ ${msg}</div>
+      </div>
+    </div>`;
+  }
+
+  // extracted or low_confidence
+  const detailFields = [
+    ['address','📍'],['city','📍'],['country','🌍'],['price','💰'],
+    ['check_in','🛎️ Check-in'],['check_out','🛎️ Check-out'],['hours','🕐'],
+    ['phone','📞'],['cuisine','🍴'],['airline','✈️'],['flight_number','🔢'],
+    ['departure','🛫'],['arrival','🛬'],['rating','⭐'],['notes','📝'],
+  ];
+  const details = detailFields.filter(([k]) => ext[k])
+    .map(([k, lbl]) => `<div class="detail-line">${lbl} ${escHtml(ext[k])}</div>`).join('');
+  const expandHtml = details ? `
+    <span class="link-expand" onclick="toggleLinkDetails(this)">Details ▼</span>
+    <div class="link-expanded">${details}</div>` : '';
+  const warnHtml = status === 'low_confidence'
+    ? '<div class="link-warn">⚠️ Limited info — paste page text for more</div>' : '';
+
+  return `<div class="feed-item">
+    <div class="feed-icon">${icon}</div>
+    <div class="feed-content">
+      <div class="link-title">${escHtml(ext.title || urlShort)}</div>
+      ${ext.summary ? `<div class="link-summary">${escHtml(ext.summary)}</div>` : ''}
+      ${warnHtml}${expandHtml}
+    </div>
+  </div>`;
+}
+
+function toggleLinkDetails(el) {
+  const panel = el.nextElementSibling;
+  const open = panel.classList.toggle('open');
+  el.textContent = open ? 'Details ▲' : 'Details ▼';
+}
+
 function renderFeed() {
   const trip = trips.find(t => t.id === activeTripId);
   if (!trip) return;
@@ -593,16 +671,16 @@ function renderFeed() {
   feedHeader.textContent = `Saved (${trip.items.length})`;
 
   feedItems.innerHTML = [...trip.items].reverse().map(item => {
-    const icons = { text: '📝', email: '📧', link: '🔗', file: '📎' };
+    if (item.type === 'link') return renderLinkItem(item);
+
+    const icons = { text: '📝', email: '📧', file: '📎' };
     const icon = icons[item.type] || '📄';
     const isPdf = item.file_kind === 'document';
     const isImage = item.file_kind === 'image' || item.type === 'image';
     let label = item.label || item.type;
     let preview = '';
 
-    if (item.url) {
-      preview = `<div class="feed-url">${escHtml(item.url)}</div>`;
-    } else if (isPdf) {
+    if (isPdf) {
       label = item.filename || 'PDF';
       preview = `<div class="feed-preview" style="color:var(--warn)">📄 ${escHtml(item.filename || 'Document')}</div>`;
     } else if (isImage) {
@@ -621,6 +699,21 @@ function renderFeed() {
       </div>
     </div>`;
   }).join('');
+
+  startPollingIfNeeded();
+}
+
+function startPollingIfNeeded() {
+  const trip = trips.find(t => t.id === activeTripId);
+  const hasPending = trip && trip.items.some(i => i.extraction && i.extraction.status === 'pending');
+  if (hasPending && !pollTimer) {
+    pollTimer = setInterval(async () => {
+      await loadTrips();
+      const t = trips.find(x => x.id === activeTripId);
+      const stillPending = t && t.items.some(i => i.extraction && i.extraction.status === 'pending');
+      if (!stillPending) { clearInterval(pollTimer); pollTimer = null; }
+    }, 2500);
+  }
 }
 
 // ─────────────────────────────────────────────────

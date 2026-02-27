@@ -142,6 +142,146 @@ async def fetch_url_text(url: str) -> str:
         return parser.get_text()
 
 
+def _fetch_url_text_sync(url: str) -> str:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; Apollo-Travel/1.0)"}
+    with httpx.Client(follow_redirects=True, timeout=15) as client:
+        resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+        parser = _TextExtractor()
+        parser.feed(resp.text)
+        return parser.get_text()
+
+
+def _url_to_title(url: str) -> str:
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(url)
+        return (p.netloc + p.path).replace("www.", "").rstrip("/") or url
+    except Exception:
+        return url
+
+
+def _update_item(trip_id: str, item_id: str, updates: dict):
+    index = load_index()
+    trip = index["trips"].get(trip_id)
+    if not trip:
+        return
+    for i, item in enumerate(trip["items"]):
+        if item["id"] == item_id:
+            trip["items"][i].update(updates)
+            save_index(index)
+            return
+
+
+_LINK_EXTRACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status":        {"type": "string"},
+        "title":         {"type": "string"},
+        "category":      {"type": "string"},
+        "summary":       {"type": "string"},
+        "address":       {"type": "string"},
+        "city":          {"type": "string"},
+        "country":       {"type": "string"},
+        "price":         {"type": "string"},
+        "check_in":      {"type": "string"},
+        "check_out":     {"type": "string"},
+        "hours":         {"type": "string"},
+        "phone":         {"type": "string"},
+        "cuisine":       {"type": "string"},
+        "airline":       {"type": "string"},
+        "flight_number": {"type": "string"},
+        "departure":     {"type": "string"},
+        "arrival":       {"type": "string"},
+        "rating":        {"type": "string"},
+        "notes":         {"type": "string"},
+    },
+    "required": ["status", "title", "category", "summary"],
+    "additionalProperties": False,
+}
+
+_LINK_SYSTEM = (
+    "You extract travel-relevant details from webpages for a travel planning app. "
+    "Only include fields with clear, explicitly stated values — never guess. "
+    "status: 'extracted' = found useful info; 'low_confidence' = very little info; "
+    "'inaccessible' = paywall or login required. "
+    "category: one of hotel | restaurant | flight | attraction | transport | other."
+)
+
+
+def _extract_link_sync(trip_id: str, item_id: str, url: str):
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+        client = anthropic.Anthropic(api_key=api_key)
+
+        try:
+            page_text = _fetch_url_text_sync(url)
+        except Exception:
+            page_text = None
+
+        if not page_text or len(page_text.strip()) < 80:
+            _update_item(trip_id, item_id, {
+                "extraction": {
+                    "status": "inaccessible",
+                    "title": _url_to_title(url),
+                    "category": "other",
+                    "summary": "",
+                },
+                "content": f"Source: {url}\n[Page inaccessible — raw URL preserved]",
+            })
+            return
+
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            system=_LINK_SYSTEM,
+            messages=[{"role": "user", "content":
+                f"Extract travel details from this page.\nURL: {url}\n\nContent:\n{page_text[:6000]}"}],
+            output_config={"format": {"type": "json_schema", "schema": _LINK_EXTRACTION_SCHEMA}},
+        )
+
+        ext = json.loads(response.content[0].text)
+
+        # Build formatted content for AI context in chat / itinerary
+        lines = [
+            f"Source: {url}",
+            f"Title: {ext['title']}",
+            f"Type: {ext['category']}",
+            f"Summary: {ext['summary']}",
+        ]
+        for k in ["address", "city", "country", "price", "check_in", "check_out",
+                  "hours", "phone", "cuisine", "airline", "flight_number",
+                  "departure", "arrival", "rating", "notes"]:
+            if ext.get(k):
+                lines.append(f"{k.replace('_', ' ').title()}: {ext[k]}")
+        if ext.get("status") == "inaccessible":
+            lines.append("[Note: page is behind a paywall or login — consider pasting content manually]")
+        elif ext.get("status") == "low_confidence":
+            lines.append("[Note: limited info extracted — consider pasting page content manually]")
+
+        _update_item(trip_id, item_id, {
+            "extraction": ext,
+            "content": "\n".join(lines),
+        })
+
+    except Exception:
+        _update_item(trip_id, item_id, {
+            "extraction": {
+                "status": "failed",
+                "title": _url_to_title(url),
+                "category": "other",
+                "summary": "",
+            },
+            "content": f"Source: {url}\n[Extraction failed — raw URL preserved]",
+        })
+
+
+async def extract_link_background(trip_id: str, item_id: str, url: str):
+    await asyncio.to_thread(_extract_link_sync, trip_id, item_id, url)
+
+
 def get_client() -> anthropic.Anthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -190,8 +330,8 @@ async def rename_trip(trip_id: str, name: str = Form(...)):
     return {"ok": True}
 
 
-async def extract_metadata_background(trip_id: str):
-    """Silently parse destination/dates from captured content. Never blocks or surfaces errors."""
+def _extract_metadata_sync(trip_id: str):
+    """Silently parse destination/dates from captured content. Runs in thread pool."""
     try:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
@@ -240,6 +380,10 @@ async def extract_metadata_background(trip_id: str):
         pass  # Never surface errors during capture
 
 
+async def extract_metadata_background(trip_id: str):
+    await asyncio.to_thread(_extract_metadata_sync, trip_id)
+
+
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
     background_tasks: BackgroundTasks,
@@ -264,13 +408,9 @@ async def upload_content(
     elif content_type == "link":
         if not url:
             raise HTTPException(status_code=400, detail="No URL provided")
-        try:
-            page_text = await fetch_url_text(url)
-        except Exception:
-            # Per user story: if link can't be parsed, store raw URL and move on silently
-            page_text = ""
         item["url"] = url
-        item["content"] = f"Source: {url}\n\n{page_text[:8000]}" if page_text else f"Source: {url}"
+        item["content"] = f"Source: {url}"
+        item["extraction"] = {"status": "pending", "title": _url_to_title(url), "category": "other", "summary": ""}
         item["file_id"] = None
 
     elif content_type in ("image", "file"):
@@ -292,6 +432,8 @@ async def upload_content(
 
     # Background: silently parse metadata — never blocks the response
     background_tasks.add_task(extract_metadata_background, trip_id)
+    if content_type == "link":
+        background_tasks.add_task(extract_link_background, trip_id, item["id"], url)
 
     return {"ok": True, "item": item}
 
