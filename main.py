@@ -330,6 +330,16 @@ async def rename_trip(trip_id: str, name: str = Form(...)):
     return {"ok": True}
 
 
+@app.delete("/api/trips/{trip_id}")
+async def delete_trip(trip_id: str):
+    index = load_index()
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    del index["trips"][trip_id]
+    save_index(index)
+    return {"ok": True}
+
+
 def _extract_metadata_sync(trip_id: str):
     """Silently parse destination/dates from captured content. Runs in thread pool."""
     try:

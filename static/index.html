@@ -269,6 +269,7 @@
         placeholder="Trip name"
         onblur="saveTriName()" onkeydown="if(event.key==='Enter')this.blur()" />
       <span class="item-count" id="trip-item-count"></span>
+      <button class="tool-btn" style="color:var(--danger);border-color:transparent;padding:4px 8px" onclick="deleteTrip()" title="Delete trip">🗑</button>
     </div>
 
     <div class="notebook-area">
@@ -480,6 +481,18 @@ async function saveTriName() {
   fd.append('name', name);
   await fetch(`/api/trips/${activeTripId}/rename`, { method: 'PATCH', body: fd });
   renderShelf();
+}
+
+async function deleteTrip() {
+  if (!activeTripId) return;
+  const trip = trips.find(t => t.id === activeTripId);
+  if (!confirm(`Delete "${trip?.name}"? This cannot be undone.`)) return;
+  await fetch(`/api/trips/${activeTripId}`, { method: 'DELETE' });
+  activeTripId = null;
+  document.getElementById('notebook-wrap').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+  await loadTrips();
+  toast('Trip deleted');
 }
 
 // ─────────────────────────────────────────────────
