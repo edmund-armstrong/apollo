@@ -4,13 +4,14 @@ import uuid
 import base64
 import asyncio
 import re
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Optional
 
 import httpx
 import anthropic
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -164,23 +165,86 @@ async def list_trips():
 
 
 @app.post("/api/trips")
-async def create_trip(name: str = Form(...)):
+async def create_trip(name: Optional[str] = Form(None)):
     index = load_index()
     trip_id = str(uuid.uuid4())[:8]
+    auto_name = name.strip() if name and name.strip() else f"Trip — {datetime.now().strftime('%b %d')}"
     index["trips"][trip_id] = {
         "id": trip_id,
-        "name": name,
+        "name": auto_name,
         "items": [],
         "itinerary": None,
+        "metadata": {},
     }
     save_index(index)
     return index["trips"][trip_id]
 
 
+@app.patch("/api/trips/{trip_id}/rename")
+async def rename_trip(trip_id: str, name: str = Form(...)):
+    index = load_index()
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    index["trips"][trip_id]["name"] = name.strip()
+    save_index(index)
+    return {"ok": True}
+
+
+async def extract_metadata_background(trip_id: str):
+    """Silently parse destination/dates from captured content. Never blocks or surfaces errors."""
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+        client = anthropic.Anthropic(api_key=api_key)
+        index = load_index()
+        trip = index["trips"].get(trip_id)
+        if not trip or not trip["items"]:
+            return
+        text_items = [i["content"] for i in trip["items"] if i.get("content")]
+        if not text_items:
+            return
+        combined = "\n\n".join(text_items[:5])
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=256,
+            messages=[{"role": "user", "content": (
+                "Extract from this travel content. Return ONLY valid JSON with: "
+                "destination (string, city/country or empty), dates (string, range or empty), "
+                "confirmed (boolean). Content:\n" + combined[:3000]
+            )}],
+            output_config={"format": {"type": "json_schema", "schema": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string"},
+                    "dates": {"type": "string"},
+                    "confirmed": {"type": "boolean"},
+                },
+                "required": ["destination", "dates", "confirmed"],
+                "additionalProperties": False,
+            }}},
+        )
+        metadata = json.loads(response.content[0].text)
+        index = load_index()
+        if trip_id not in index["trips"]:
+            return
+        index["trips"][trip_id]["metadata"] = metadata
+        # Auto-update name if still a default and we found a destination
+        current_name = index["trips"][trip_id]["name"]
+        dest = metadata.get("destination", "")
+        if current_name.startswith("Trip — ") and dest:
+            dates = metadata.get("dates", "")
+            index["trips"][trip_id]["name"] = f"{dest}{' · ' + dates if dates else ''}"
+        save_index(index)
+    except Exception:
+        pass  # Never surface errors during capture
+
+
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
+    background_tasks: BackgroundTasks,
     trip_id: str,
-    content_type: str = Form(...),  # "text" | "image" | "email" | "link"
+    content_type: str = Form(...),  # "text" | "file" | "email" | "link"
     text: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
@@ -202,31 +266,33 @@ async def upload_content(
             raise HTTPException(status_code=400, detail="No URL provided")
         try:
             page_text = await fetch_url_text(url)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not fetch URL: {e}")
+        except Exception:
+            # Per user story: if link can't be parsed, store raw URL and move on silently
+            page_text = ""
         item["url"] = url
-        item["content"] = f"Source: {url}\n\n{page_text[:8000]}"  # cap at 8k chars
+        item["content"] = f"Source: {url}\n\n{page_text[:8000]}" if page_text else f"Source: {url}"
         item["file_id"] = None
 
-    elif content_type == "image":
+    elif content_type in ("image", "file"):
         if not file:
             raise HTTPException(status_code=400, detail="No file provided")
         raw = await file.read()
-        mime = file.content_type or "image/jpeg"
-
-        # Upload to Claude Files API so we don't re-upload later
-        uploaded = client.beta.files.upload(
-            file=(file.filename, raw, mime),
-        )
+        mime = file.content_type or "application/octet-stream"
+        uploaded = client.beta.files.upload(file=(file.filename, raw, mime))
+        item["type"] = "file"
+        item["file_kind"] = "document" if mime == "application/pdf" else "image"
         item["file_id"] = uploaded.id
         item["filename"] = file.filename
         item["mime"] = mime
         item["content"] = None
 
     index["trips"][trip_id]["items"].append(item)
-    # Clear cached itinerary when new content is added
     index["trips"][trip_id]["itinerary"] = None
     save_index(index)
+
+    # Background: silently parse metadata — never blocks the response
+    background_tasks.add_task(extract_metadata_background, trip_id)
+
     return {"ok": True, "item": item}
 
 
@@ -261,17 +327,16 @@ async def organize_trip(trip_id: str):
 
     for item in trip["items"]:
         label = f"[{item['label'] or item['type']}]"
-        if item["type"] == "image" and item.get("file_id"):
-            content.append({"type": "text", "text": f"\n{label} (screenshot/image):"})
-            content.append({
-                "type": "image",
-                "source": {"type": "file", "file_id": item["file_id"]},
-            })
+        if item.get("file_id"):
+            file_kind = item.get("file_kind", "image")
+            if file_kind == "document":
+                content.append({"type": "text", "text": f"\n{label} (PDF document):"})
+                content.append({"type": "document", "source": {"type": "file", "file_id": item["file_id"]}})
+            else:
+                content.append({"type": "text", "text": f"\n{label} (screenshot/image):"})
+                content.append({"type": "image", "source": {"type": "file", "file_id": item["file_id"]}})
         elif item.get("content"):
-            content.append({
-                "type": "text",
-                "text": f"\n{label}:\n{item['content']}",
-            })
+            content.append({"type": "text", "text": f"\n{label}:\n{item['content']}"})
 
     response = client.beta.messages.create(
         model="claude-opus-4-6",
