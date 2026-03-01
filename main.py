@@ -60,7 +60,7 @@ def gmail_flow() -> Flow:
 
 def get_gmail_service():
     if not GMAIL_TOKEN_FILE.exists():
-        raise HTTPException(status_code=401, detail="Gmail not connected")
+        raise HTTPException(status_code=401, detail="Gmail not connected — reconnect via the Gmail tab")
     token_data = json.loads(GMAIL_TOKEN_FILE.read_text())
     creds = Credentials(
         token=token_data["token"],
@@ -70,10 +70,17 @@ def get_gmail_service():
         client_secret=token_data["client_secret"],
         scopes=token_data["scopes"],
     )
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_data["token"] = creds.token
-        GMAIL_TOKEN_FILE.write_text(json.dumps(token_data))
+    if creds.expired:
+        if not creds.refresh_token:
+            GMAIL_TOKEN_FILE.unlink(missing_ok=True)
+            raise HTTPException(status_code=401, detail="Gmail session expired — please reconnect")
+        try:
+            creds.refresh(Request())
+            token_data["token"] = creds.token
+            GMAIL_TOKEN_FILE.write_text(json.dumps(token_data))
+        except Exception as e:
+            GMAIL_TOKEN_FILE.unlink(missing_ok=True)
+            raise HTTPException(status_code=401, detail=f"Gmail re-auth failed — please reconnect ({e})")
     return build("gmail", "v1", credentials=creds)
 
 
@@ -640,9 +647,12 @@ async def scan_emails(trip_id: str = Form(...), keywords: str = Form(...)):
     terms = [k.strip() for k in keywords.split(",") if k.strip()]
     query = " OR ".join(terms)
 
-    results = service.users().messages().list(
-        userId="me", q=query, maxResults=25
-    ).execute()
+    try:
+        results = service.users().messages().list(
+            userId="me", q=query, maxResults=25
+        ).execute()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gmail API error: {e}")
 
     messages = results.get("messages", [])
     if not messages:

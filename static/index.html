@@ -892,7 +892,12 @@ async function scanGmail() {
   const fd = new FormData(); fd.append('trip_id', tripId); fd.append('keywords', keywords);
   const res = await fetch('/api/email/scan', { method: 'POST', body: fd });
   btn.disabled = false; btn.innerHTML = '🔍 Search Inbox';
-  if (!res.ok) { toast('Scan failed'); return; }
+  if (!res.ok) {
+    let msg = 'Scan failed';
+    try { const err = await res.json(); msg = err.detail || msg; } catch {}
+    toast(msg);
+    return;
+  }
   const { emails } = await res.json();
   document.getElementById('email-count').textContent = `(${emails.length} found)`;
   document.getElementById('gmail-results-card').style.display = 'block';
