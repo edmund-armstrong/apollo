@@ -632,7 +632,13 @@ async def gmail_callback(code: str):
 
 @app.get("/api/auth/gmail/status")
 async def gmail_status():
-    return {"connected": GMAIL_TOKEN_FILE.exists()}
+    if not GMAIL_TOKEN_FILE.exists():
+        return {"connected": False}
+    try:
+        get_gmail_service()
+        return {"connected": True}
+    except HTTPException:
+        return {"connected": False}
 
 
 @app.post("/api/email/scan")
@@ -652,6 +658,9 @@ async def scan_emails(trip_id: str = Form(...), keywords: str = Form(...)):
             userId="me", q=query, maxResults=25
         ).execute()
     except Exception as e:
+        if "invalid_grant" in str(e) or "Token has been expired or revoked" in str(e):
+            GMAIL_TOKEN_FILE.unlink(missing_ok=True)
+            raise HTTPException(status_code=401, detail="Gmail session expired — please reconnect")
         raise HTTPException(status_code=502, detail=f"Gmail API error: {e}")
 
     messages = results.get("messages", [])
