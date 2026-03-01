@@ -635,9 +635,12 @@ async def gmail_status():
     if not GMAIL_TOKEN_FILE.exists():
         return {"connected": False}
     try:
-        get_gmail_service()
+        service = get_gmail_service()
+        # Make a lightweight real API call to confirm the token actually works
+        service.users().getProfile(userId="me").execute()
         return {"connected": True}
-    except HTTPException:
+    except Exception:
+        GMAIL_TOKEN_FILE.unlink(missing_ok=True)
         return {"connected": False}
 
 
