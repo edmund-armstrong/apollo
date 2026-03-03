@@ -11,7 +11,7 @@ from typing import Optional
 
 import httpx
 import anthropic
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -112,6 +112,38 @@ def save_index(index: dict):
     INDEX_FILE.write_text(json.dumps(index, indent=2))
 
 
+# ---------------------------------------------------------------------------
+# Per-user storage (invite-link auth)
+# ---------------------------------------------------------------------------
+
+USERS_DIR = STORAGE_DIR / "users"
+USERS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def user_index_file(token: str) -> Path:
+    d = USERS_DIR / token
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "index.json"
+
+
+def load_user_index(token: str) -> dict:
+    f = user_index_file(token)
+    if f.exists():
+        return json.loads(f.read_text())
+    return {"trips": {}}
+
+
+def save_user_index(token: str, index: dict):
+    user_index_file(token).write_text(json.dumps(index, indent=2))
+
+
+def get_user_token(request: Request) -> str:
+    token = request.cookies.get("apollo_user")
+    if not token:
+        raise HTTPException(status_code=401, detail="No invite token")
+    return token
+
+
 class _TextExtractor(HTMLParser):
     """Strip HTML tags and return plain text."""
     def __init__(self):
@@ -192,15 +224,15 @@ def _url_to_title(url: str) -> str:
         return url
 
 
-def _update_item(trip_id: str, item_id: str, updates: dict):
-    index = load_index()
+def _update_item(user_token: str, trip_id: str, item_id: str, updates: dict):
+    index = load_user_index(user_token)
     trip = index["trips"].get(trip_id)
     if not trip:
         return
     for i, item in enumerate(trip["items"]):
         if item["id"] == item_id:
             trip["items"][i].update(updates)
-            save_index(index)
+            save_user_index(user_token, index)
             return
 
 
@@ -247,7 +279,7 @@ _LINK_SYSTEM = (
 )
 
 
-def _extract_link_sync(trip_id: str, item_id: str, url: str):
+def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
     try:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
@@ -260,7 +292,7 @@ def _extract_link_sync(trip_id: str, item_id: str, url: str):
             page_text = None
 
         if not page_text or len(page_text.strip()) < 80:
-            _update_item(trip_id, item_id, {
+            _update_item(user_token, trip_id, item_id, {
                 "extraction": {
                     "status": "inaccessible",
                     "title": _url_to_title(url),
@@ -299,13 +331,13 @@ def _extract_link_sync(trip_id: str, item_id: str, url: str):
         elif ext.get("status") == "low_confidence":
             lines.append("[Note: limited info extracted — consider pasting page content manually]")
 
-        _update_item(trip_id, item_id, {
+        _update_item(user_token, trip_id, item_id, {
             "extraction": ext,
             "content": "\n".join(lines),
         })
 
     except Exception:
-        _update_item(trip_id, item_id, {
+        _update_item(user_token, trip_id, item_id, {
             "extraction": {
                 "status": "failed",
                 "title": _url_to_title(url),
@@ -316,8 +348,8 @@ def _extract_link_sync(trip_id: str, item_id: str, url: str):
         })
 
 
-async def extract_link_background(trip_id: str, item_id: str, url: str):
-    await asyncio.to_thread(_extract_link_sync, trip_id, item_id, url)
+async def extract_link_background(user_token: str, trip_id: str, item_id: str, url: str):
+    await asyncio.to_thread(_extract_link_sync, user_token, trip_id, item_id, url)
 
 
 def get_client() -> anthropic.Anthropic:
@@ -331,20 +363,91 @@ def get_client() -> anthropic.Anthropic:
 # Routes
 # ---------------------------------------------------------------------------
 
+_JOIN_PASSWORD = os.getenv("JOIN_PASSWORD", "ilovetravel")
+
+_GATE_HTML = """<!DOCTYPE html>
+<html><head><title>Apollo — Early Access</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{background:rgba(255,255,255,.07);backdrop-filter:blur(20px);
+        border:1px solid rgba(255,255,255,.12);border-radius:24px;
+        padding:48px 40px;width:100%;max-width:380px;text-align:center}
+  h1{color:#fff;font-size:2rem;margin-bottom:6px;letter-spacing:-0.5px}
+  .tagline{color:rgba(255,255,255,.5);font-size:0.9rem;margin-bottom:36px}
+  label{display:block;text-align:left;color:rgba(255,255,255,.6);
+        font-size:0.78rem;font-weight:500;text-transform:uppercase;
+        letter-spacing:.06em;margin-bottom:8px}
+  input{width:100%;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
+        background:rgba(255,255,255,.08);color:#fff;font-size:1rem;outline:none;
+        transition:border-color .2s}
+  input::placeholder{color:rgba(255,255,255,.3)}
+  input:focus{border-color:rgba(255,255,255,.4)}
+  button{margin-top:16px;width:100%;padding:14px;border-radius:12px;border:none;
+         background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
+         font-size:1rem;font-weight:600;cursor:pointer;transition:opacity .2s}
+  button:hover{opacity:.9}
+  .error{color:#ff6b6b;font-size:0.85rem;margin-top:12px;display:none}
+</style></head>
+<body>
+<div class="card">
+  <h1>✈️ Apollo</h1>
+  <p class="tagline">AI-powered travel planning</p>
+  <form id="form">
+    <label for="pw">Early access password</label>
+    <input type="password" id="pw" placeholder="Enter password" autocomplete="current-password" />
+    <button type="submit">Continue</button>
+    <div class="error" id="err">Incorrect password — try again.</div>
+  </form>
+</div>
+<script>
+document.getElementById('form').onsubmit = async e => {
+  e.preventDefault();
+  const pw = document.getElementById('pw').value;
+  const res = await fetch('/api/auth/join', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'password=' + encodeURIComponent(pw)
+  });
+  if (res.ok) { window.location.href = '/'; }
+  else { document.getElementById('err').style.display = 'block'; }
+};
+</script>
+</body></html>"""
+
+
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def root(request: Request):
+    if not request.cookies.get("apollo_user"):
+        return HTMLResponse(_GATE_HTML)
     return (Path("static") / "index.html").read_text()
 
 
+@app.post("/api/auth/join")
+async def join(password: str = Form(...)):
+    if password != _JOIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    token = str(uuid.uuid4()).replace("-", "")
+    save_user_index(token, {"trips": {}})
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie("apollo_user", token, max_age=60*60*24*365, httponly=True, samesite="lax")
+    return response
+
+
 @app.get("/api/trips")
-async def list_trips():
-    index = load_index()
+async def list_trips(request: Request):
+    token = get_user_token(request)
+    index = load_user_index(token)
     return {"trips": list(index["trips"].values())}
 
 
 @app.post("/api/trips")
-async def create_trip(name: Optional[str] = Form(None)):
-    index = load_index()
+async def create_trip(request: Request, name: Optional[str] = Form(None)):
+    token = get_user_token(request)
+    index = load_user_index(token)
     trip_id = str(uuid.uuid4())[:8]
     auto_name = name.strip() if name and name.strip() else f"Trip — {datetime.now().strftime('%b %d')}"
     index["trips"][trip_id] = {
@@ -354,38 +457,40 @@ async def create_trip(name: Optional[str] = Form(None)):
         "itinerary": None,
         "metadata": {},
     }
-    save_index(index)
+    save_user_index(token, index)
     return index["trips"][trip_id]
 
 
 @app.patch("/api/trips/{trip_id}/rename")
-async def rename_trip(trip_id: str, name: str = Form(...)):
-    index = load_index()
+async def rename_trip(request: Request, trip_id: str, name: str = Form(...)):
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
     index["trips"][trip_id]["name"] = name.strip()
-    save_index(index)
+    save_user_index(token, index)
     return {"ok": True}
 
 
 @app.delete("/api/trips/{trip_id}")
-async def delete_trip(trip_id: str):
-    index = load_index()
+async def delete_trip(request: Request, trip_id: str):
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
     del index["trips"][trip_id]
-    save_index(index)
+    save_user_index(token, index)
     return {"ok": True}
 
 
-def _extract_metadata_sync(trip_id: str):
+def _extract_metadata_sync(user_token: str, trip_id: str):
     """Silently parse destination/dates from captured content. Runs in thread pool."""
     try:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             return
         client = anthropic.Anthropic(api_key=api_key)
-        index = load_index()
+        index = load_user_index(user_token)
         trip = index["trips"].get(trip_id)
         if not trip or not trip["items"]:
             return
@@ -413,27 +518,27 @@ def _extract_metadata_sync(trip_id: str):
             }}},
         )
         metadata = json.loads(response.content[0].text)
-        index = load_index()
+        index = load_user_index(user_token)
         if trip_id not in index["trips"]:
             return
         index["trips"][trip_id]["metadata"] = metadata
-        # Auto-update name if still a default and we found a destination
         current_name = index["trips"][trip_id]["name"]
         dest = metadata.get("destination", "")
         if current_name.startswith("Trip — ") and dest:
             dates = metadata.get("dates", "")
             index["trips"][trip_id]["name"] = f"{dest}{' · ' + dates if dates else ''}"
-        save_index(index)
+        save_user_index(user_token, index)
     except Exception:
         pass  # Never surface errors during capture
 
 
-async def extract_metadata_background(trip_id: str):
-    await asyncio.to_thread(_extract_metadata_sync, trip_id)
+async def extract_metadata_background(user_token: str, trip_id: str):
+    await asyncio.to_thread(_extract_metadata_sync, user_token, trip_id)
 
 
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
+    request: Request,
     background_tasks: BackgroundTasks,
     trip_id: str,
     content_type: str = Form(...),  # "text" | "file" | "email" | "link"
@@ -442,7 +547,8 @@ async def upload_content(
     file: Optional[UploadFile] = File(None),
     label: Optional[str] = Form(None),
 ):
-    index = load_index()
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
 
@@ -476,19 +582,20 @@ async def upload_content(
 
     index["trips"][trip_id]["items"].append(item)
     index["trips"][trip_id]["itinerary"] = None
-    save_index(index)
+    save_user_index(token, index)
 
     # Background: silently parse metadata — never blocks the response
-    background_tasks.add_task(extract_metadata_background, trip_id)
+    background_tasks.add_task(extract_metadata_background, token, trip_id)
     if content_type == "link":
-        background_tasks.add_task(extract_link_background, trip_id, item["id"], url)
+        background_tasks.add_task(extract_link_background, token, trip_id, item["id"], url)
 
     return {"ok": True, "item": item}
 
 
 @app.post("/api/trips/{trip_id}/organize")
-async def organize_trip(trip_id: str):
-    index = load_index()
+async def organize_trip(request: Request, trip_id: str):
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
 
@@ -540,19 +647,21 @@ async def organize_trip(trip_id: str):
         (b.text for b in response.content if b.type == "text"), ""
     )
     index["trips"][trip_id]["itinerary"] = itinerary_text
-    save_index(index)
+    save_user_index(token, index)
     return {"itinerary": itinerary_text}
 
 
 @app.post("/api/chat")
 async def chat(
+    request: Request,
     message: str = Form(...),
     trip_id: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     history: str = Form(default="[]"),
 ):
-    index = load_index()
+    token = get_user_token(request)
+    index = load_user_index(token)
     client = get_client()
 
     # Build location context
@@ -646,8 +755,9 @@ async def gmail_status():
 
 
 @app.post("/api/email/scan")
-async def scan_emails(trip_id: str = Form(...), keywords: str = Form(...)):
-    index = load_index()
+async def scan_emails(request: Request, trip_id: str = Form(...), keywords: str = Form(...)):
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
 
@@ -691,13 +801,15 @@ async def scan_emails(trip_id: str = Form(...), keywords: str = Form(...)):
 
 @app.post("/api/email/add")
 async def add_email_to_trip(
+    request: Request,
     trip_id: str = Form(...),
     subject: str = Form(...),
     sender: str = Form(...),
     date: str = Form(...),
     body: str = Form(...),
 ):
-    index = load_index()
+    token = get_user_token(request)
+    index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
 
@@ -710,7 +822,7 @@ async def add_email_to_trip(
     }
     index["trips"][trip_id]["items"].append(item)
     index["trips"][trip_id]["itinerary"] = None
-    save_index(index)
+    save_user_index(token, index)
     return {"ok": True, "item": item}
 
 
