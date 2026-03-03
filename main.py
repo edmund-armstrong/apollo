@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
@@ -76,7 +76,7 @@ def get_gmail_service():
             GMAIL_TOKEN_FILE.unlink(missing_ok=True)
             raise HTTPException(status_code=401, detail="Gmail session expired — please reconnect")
         try:
-            creds.refresh(Request())
+            creds.refresh(GoogleAuthRequest())
             token_data["token"] = creds.token
             GMAIL_TOKEN_FILE.write_text(json.dumps(token_data))
         except Exception as e:
