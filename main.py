@@ -37,7 +37,8 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 GMAIL_TOKEN_FILE = STORAGE_DIR / "gmail_token.json"
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-GMAIL_REDIRECT_URI = "http://localhost:8000/api/auth/gmail/callback"
+_APP_URL = os.getenv("APP_URL", "http://localhost:8000").rstrip("/")
+GMAIL_REDIRECT_URI = f"{_APP_URL}/api/auth/gmail/callback"
 
 
 def gmail_flow() -> Flow:
@@ -719,4 +720,6 @@ async def add_email_to_trip(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    reload = os.getenv("ENVIRONMENT") != "production"
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload)
