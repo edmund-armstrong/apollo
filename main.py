@@ -198,6 +198,38 @@ def _fetch_tiktok_oembed(url: str) -> dict:
         return resp.json()
 
 
+def _fetch_reddit_text_sync(url: str) -> str:
+    """Fetch Reddit post content via the public JSON API (no auth required)."""
+    import re as _re
+    # Normalize to the JSON endpoint: strip query/fragment, ensure trailing slash before .json
+    clean = _re.sub(r"[?#].*$", "", url).rstrip("/")
+    json_url = clean + ".json"
+    with httpx.Client(follow_redirects=True, timeout=15) as client:
+        resp = client.get(
+            json_url,
+            headers={"User-Agent": "Apollo travel app (personal use)"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    # Reddit JSON structure: [post_listing, comments_listing]
+    post = data[0]["data"]["children"][0]["data"]
+    title = post.get("title", "")
+    selftext = post.get("selftext", "")
+    subreddit = post.get("subreddit_name_prefixed", "")
+    # Pull top-level comments for extra context
+    comments = []
+    for child in data[1]["data"]["children"][:10]:
+        body = child["data"].get("body", "")
+        if body and body != "[deleted]":
+            comments.append(body)
+    parts = [f"Title: {title}", f"Subreddit: {subreddit}"]
+    if selftext:
+        parts.append(f"Post: {selftext}")
+    if comments:
+        parts.append("Top comments:\n" + "\n\n".join(comments))
+    return "\n\n".join(parts)
+
+
 _FETCH_UA_LIST = [
     # Many CDNs (Akamai, Cloudflare) explicitly allow known search crawlers
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -295,6 +327,107 @@ _LINK_SYSTEM = (
 )
 
 
+def _is_google_maps_url(url: str) -> bool:
+    return bool(re.search(r"(maps\.google\.|google\.[a-z]+/maps|maps\.app\.goo\.gl|goo\.gl/maps)", url))
+
+
+def _fetch_google_maps_place(url: str) -> dict:
+    """
+    Extract place details from a Google Maps URL.
+    Resolves shortened URLs, parses the place name, and optionally enriches
+    with the Places API if GOOGLE_PLACES_API_KEY is set.
+    """
+    # Resolve shortened / redirected URLs (goo.gl, maps.app.goo.gl, etc.)
+    resolved = url
+    if "goo.gl" in url:
+        try:
+            with httpx.Client(follow_redirects=True, timeout=10) as c:
+                r = c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resolved = str(r.url)
+        except Exception:
+            pass
+
+    # Extract place name from URL path  /maps/place/PLACE_NAME/
+    place_query: Optional[str] = None
+    m = re.search(r"/maps/place/([^/@?]+)", resolved)
+    if m:
+        import urllib.parse
+        place_query = urllib.parse.unquote_plus(m.group(1))
+    if not place_query:
+        m = re.search(r"[?&]q=([^&]+)", resolved)
+        if m:
+            import urllib.parse
+            place_query = urllib.parse.unquote_plus(m.group(1))
+
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+
+    # No API key — return minimal extraction from the URL itself
+    if not api_key:
+        title = place_query or "Google Maps place"
+        return {
+            "status": "extracted",
+            "title": title,
+            "category": "attraction",
+            "summary": "",
+        }
+
+    # Call Places API — Find Place
+    try:
+        query = place_query or resolved
+        with httpx.Client(timeout=10) as c:
+            r = c.get(
+                "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+                params={
+                    "input": query,
+                    "inputtype": "textquery",
+                    "fields": "name,formatted_address,rating,opening_hours,formatted_phone_number,website,types,price_level,editorial_summary",
+                    "key": api_key,
+                },
+            )
+        data = r.json()
+    except Exception:
+        title = place_query or "Google Maps place"
+        return {"status": "extracted", "title": title, "category": "attraction", "summary": ""}
+
+    if data.get("status") != "OK" or not data.get("candidates"):
+        title = place_query or "Google Maps place"
+        return {"status": "extracted", "title": title, "category": "attraction", "summary": ""}
+
+    place = data["candidates"][0]
+
+    # Map Google types → Apollo category
+    types = place.get("types", [])
+    category = "attraction"
+    if any(t in types for t in ["restaurant", "food", "cafe", "bar", "bakery", "meal_takeaway"]):
+        category = "restaurant"
+    elif any(t in types for t in ["lodging", "hotel"]):
+        category = "hotel"
+    elif any(t in types for t in ["airport", "transit_station", "bus_station", "train_station"]):
+        category = "transport"
+
+    hours = None
+    weekday_text = place.get("opening_hours", {}).get("weekday_text")
+    if weekday_text:
+        hours = " | ".join(weekday_text)
+
+    price_map = {1: "$", 2: "$$", 3: "$$$", 4: "$$$$"}
+    price = price_map.get(place.get("price_level"))
+
+    rating = place.get("rating")
+
+    return {
+        "status": "extracted",
+        "title": place.get("name") or place_query or "Google Maps place",
+        "category": category,
+        "summary": (place.get("editorial_summary") or {}).get("overview", ""),
+        "address": place.get("formatted_address") or "",
+        "rating": str(rating) if rating else None,
+        "phone": place.get("formatted_phone_number"),
+        "hours": hours,
+        "price": price,
+    }
+
+
 def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
     try:
         # TikTok: use oEmbed instead of scraping
@@ -326,13 +459,37 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
                 })
             return
 
+        # Google Maps: use Places API instead of scraping
+        if _is_google_maps_url(url):
+            try:
+                ext = _fetch_google_maps_place(url)
+                lines = [f"Source: {url}", f"Title: {ext['title']}", f"Type: {ext['category']}"]
+                if ext.get("summary"):
+                    lines.append(f"Summary: {ext['summary']}")
+                for k in ["address", "rating", "phone", "hours", "price"]:
+                    if ext.get(k):
+                        lines.append(f"{k.title()}: {ext[k]}")
+                _update_item(user_token, trip_id, item_id, {
+                    "extraction": ext,
+                    "content": "\n".join(lines),
+                })
+            except Exception:
+                _update_item(user_token, trip_id, item_id, {
+                    "extraction": {"status": "failed", "title": "Google Maps place", "category": "attraction", "summary": ""},
+                    "content": f"Source: {url}\n[Google Maps extraction failed — raw URL preserved]",
+                })
+            return
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             return
         client = anthropic.Anthropic(api_key=api_key)
 
         try:
-            page_text = _fetch_url_text_sync(url)
+            if "reddit.com/" in url:
+                page_text = _fetch_reddit_text_sync(url)
+            else:
+                page_text = _fetch_url_text_sync(url)
         except Exception:
             page_text = None
 
@@ -489,6 +646,51 @@ async def list_trips(request: Request):
     return {"trips": list(index["trips"].values())}
 
 
+async def normalize_trip_name(location: str, start_date: str = "", end_date: str = "", purpose: str = "") -> str:
+    try:
+        client = get_client()
+        prompt = f"""Given the following trip details, return a normalized trip name.
+
+Format: {{City}} – {{Month}} {{Start Day}} to {{End Day}}, {{3-Word Purpose}}
+
+Rules:
+- City: primary city name only, no state or country
+- Dates: "April 11 to 15" if same month; "March 29 to April 2" if spans months
+- Purpose: condense to 3 words max using title case. If empty, omit the comma and purpose.
+- Return ONLY the trip name string. No explanation, no punctuation beyond the format.
+
+Destination: {location}
+Start date: {start_date}
+End date: {end_date}
+Purpose: {purpose}"""
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=64,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        return location or f"Trip — {datetime.now().strftime('%b %d')}"
+
+
+@app.post("/api/trips/suggest-name")
+async def suggest_trip_name(
+    request: Request,
+    location: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    purpose: Optional[str] = Form(None),
+):
+    get_user_token(request)
+    name = await normalize_trip_name(
+        location=(location or "").strip(),
+        start_date=(start_date or "").strip(),
+        end_date=(end_date or "").strip(),
+        purpose=(purpose or "").strip(),
+    )
+    return {"name": name}
+
+
 @app.post("/api/trips")
 async def create_trip(
     request: Request,
@@ -501,7 +703,14 @@ async def create_trip(
     token = get_user_token(request)
     index = load_user_index(token)
     trip_id = str(uuid.uuid4())[:8]
-    auto_name = name.strip() if name and name.strip() else f"Trip — {datetime.now().strftime('%b %d')}"
+    if name and name.strip():
+        auto_name = name.strip()
+    elif location and location.strip():
+        auto_name = await normalize_trip_name(
+            location.strip(), (start_date or "").strip(), (end_date or "").strip(), (description or "").strip()
+        )
+    else:
+        auto_name = f"Trip — {datetime.now().strftime('%b %d')}"
     index["trips"][trip_id] = {
         "id": trip_id,
         "name": auto_name,
@@ -549,6 +758,21 @@ async def delete_trip(request: Request, trip_id: str):
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
     del index["trips"][trip_id]
+    save_user_index(token, index)
+    return {"ok": True}
+
+
+@app.delete("/api/trips/{trip_id}/items/{item_id}")
+async def delete_item(request: Request, trip_id: str, item_id: str):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    trip = index["trips"].get(trip_id)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    before = len(trip["items"])
+    trip["items"] = [it for it in trip["items"] if it["id"] != item_id]
+    if len(trip["items"]) == before:
+        raise HTTPException(status_code=404, detail="Item not found")
     save_user_index(token, index)
     return {"ok": True}
 

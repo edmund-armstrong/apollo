@@ -124,42 +124,86 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .template-card p { font-size: 0.78rem; color: var(--muted); }
 
 /* ── Trip Detail ─────────────────────────────────────────── */
-#view-trip { min-height: 100vh; }
-.trip-header {
-  padding: 36px 48px 0; border-bottom: 1px solid var(--border);
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
-}
-.trip-header-left { flex: 1; }
-.trip-name { font-size: 2rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
-.trip-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; flex-wrap: wrap; }
+#view-trip { height: 100vh; overflow: hidden; padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+.trip-layout { display: flex; flex-direction: column; height: 100%; }
+#trip-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
+.trip-header { padding: 28px 40px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-shrink: 0; }
+.trip-header-info { flex: 1; }
+.trip-name { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.trip-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 0.88rem; margin-bottom: 4px; flex-wrap: wrap; }
 .trip-meta-item { display: flex; align-items: center; gap: 5px; }
-.trip-description { font-size: 0.92rem; color: var(--text); margin-bottom: 0; }
-.trip-header-actions { display: flex; gap: 10px; flex-shrink: 0; margin-top: 4px; }
-.btn-edit { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all .15s; }
-.btn-edit:hover { border-color: var(--navy); color: var(--navy); }
-.btn-delete-trip { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid transparent; border-radius: 8px; background: none; font-size: 0.85rem; font-weight: 500; color: var(--danger); cursor: pointer; transition: all .15s; }
-.btn-delete-trip:hover { background: rgba(220,38,38,.06); }
-.trip-tabs { display: flex; gap: 4px; padding: 0 48px; margin-top: 20px; }
-.trip-tab {
-  padding: 8px 16px; font-size: 0.88rem; font-weight: 500; color: var(--muted);
-  background: var(--sidebar-bg); border: 1px solid var(--border);
-  border-radius: 20px; cursor: pointer; transition: all .15s;
-}
-.trip-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 600; }
-.trip-tab:hover:not(.active) { background: #f3f4f6; }
-.trip-panel { display: none; padding: 32px 48px; }
+.trip-description { font-size: 0.88rem; color: var(--muted); }
+.trip-top-nav { display: none; }
+.trip-panel { display: none; padding: 28px 40px; }
 .trip-panel.active { display: block; }
+#add-content-bar { display: none; }
 
-/* ── Research Panel ──────────────────────────────────────── */
-.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.panel-header h2 { font-size: 1.4rem; font-weight: 700; color: var(--navy); }
-.btn-add-content {
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 18px; background: var(--navy); color: #fff;
-  border: none; border-radius: var(--radius); font-size: 0.88rem;
-  font-weight: 600; cursor: pointer; transition: background .15s;
+/* ── Chat panel ──────────────────────────────────────────── */
+#chat-panel { display: none; flex-direction: column; background: #fff; }
+#chat-panel.open { display: flex; }
+.chat-panel-header { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.chat-panel-header h3 { font-size: 1rem; font-weight: 700; color: var(--navy); }
+.chat-panel-close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--muted); padding: 4px 6px; border-radius: 6px; line-height: 1; }
+.chat-panel-close:hover { background: var(--sidebar-bg); color: var(--text); }
+.chat-starter-wrap { padding: 14px 20px 0; flex-shrink: 0; }
+.chat-starter-chip { display: inline-flex; align-items: center; padding: 7px 14px; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 20px; font-size: 0.82rem; color: var(--muted); cursor: pointer; transition: all .15s; font-family: var(--font); }
+.chat-starter-chip:hover { border-color: var(--navy); color: var(--navy); }
+
+/* ── Bottom Rail (mobile only) ───────────────────────────── */
+.bottom-rail {
+  position: fixed; bottom: 0; left: var(--sidebar-w); right: 0;
+  height: calc(64px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #fff; border-top: 1px solid var(--border);
+  display: none; align-items: center; justify-content: space-around;
+  padding-left: 8px; padding-right: 8px; z-index: 100;
+  box-shadow: 0 -1px 12px rgba(0,0,0,.06);
 }
-.btn-add-content:hover { background: var(--navy-hover); }
+.bottom-rail.visible { display: flex; }
+.rail-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 0.7rem; font-weight: 500; padding: 6px 14px;
+  border-radius: 10px; transition: color .15s; flex: 1; line-height: 1;
+}
+.rail-btn:hover { color: var(--navy); }
+.rail-btn.active { color: var(--navy); font-weight: 700; }
+.rail-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 1px; }
+.rail-center {
+  background: var(--navy); color: #fff !important;
+  width: 52px; height: 52px; border-radius: 50%;
+  font-size: 1.6rem; line-height: 1; flex: 0 0 52px; padding: 0;
+  box-shadow: 0 4px 14px rgba(30,34,53,.3); transition: background .15s, transform .1s;
+}
+.rail-center:hover { background: var(--navy-hover) !important; transform: scale(1.06); }
+
+/* ── Desktop 3-panel layout (≥768px) ────────────────────── */
+@media (min-width: 768px) {
+  #view-trip { padding-bottom: 0; }
+  .trip-layout { flex-direction: row; overflow: hidden; }
+  .bottom-rail { display: none !important; }
+  #trip-main { flex: 1; min-width: 0; overflow-y: auto; }
+  .trip-header { padding: 32px 48px 20px; }
+  .trip-name { font-size: 2rem; }
+  .trip-panel { padding: 32px 48px; }
+  .trip-top-nav { display: flex; align-items: center; gap: 2px; flex-shrink: 0; padding-top: 6px; }
+  .trip-nav-link { background: none; border: none; cursor: pointer; font-size: 0.88rem; font-weight: 500; color: var(--muted); padding: 5px 10px; border-radius: 6px; transition: color .15s; }
+  .trip-nav-link:hover { color: var(--navy); }
+  .trip-nav-link.active { color: var(--navy); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  .trip-nav-sep { color: var(--border); font-size: 0.85rem; user-select: none; }
+  #chat-panel, #itinerary-panel { width: 0; flex-shrink: 0; overflow: hidden; border-left: 0; transition: width 0.2s ease; display: flex; flex-direction: column; }
+  #chat-panel.open, #itinerary-panel.open { width: 340px; border-left: 1px solid var(--border); }
+  .chat-panel-header { padding: 24px 24px 16px; }
+  #itinerary-panel-area { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  #add-content-bar { display: block; padding: 12px 48px 20px; background: linear-gradient(transparent, #fff 30%); flex-shrink: 0; }
+  #add-content-bar button { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--navy); color: #fff; border: none; border-radius: var(--radius); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+  #add-content-bar button:hover { background: var(--navy-hover); }
+}
+
+/* Mobile: chat panel overlays content above rail */
+@media (max-width: 767px) {
+  #chat-panel.open { position: fixed; left: var(--sidebar-w); right: 0; top: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 50; }
+}
 .content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 .content-card {
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -183,23 +227,43 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .itinerary-placeholder { text-align: center; padding: 60px 20px; color: var(--muted); }
 .itinerary-placeholder p { margin-bottom: 16px; }
 
-/* ── Chat Panel ──────────────────────────────────────────── */
-.chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 280px); min-height: 400px; }
-.chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
-.chat-msg { display: flex; gap: 10px; max-width: 85%; }
+/* ── Chat internals ──────────────────────────────────────── */
+.chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px; min-height: 0; }
+.chat-msg { display: flex; gap: 10px; max-width: 90%; }
 .chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.chat-input-area { flex-shrink: 0; padding: 10px 16px 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 7px; }
+.location-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+  background: none; font-size: 0.78rem; font-weight: 500; color: var(--muted);
+  cursor: pointer; transition: all .15s; align-self: flex-start;
+}
+.location-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.location-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.location-toggle.error { border-color: #e53e3e; color: #e53e3e; }
+#location-error { font-size: 0.78rem; color: #e53e3e; margin-top: -4px; display: none; }
 .chat-bubble {
   padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
 }
 .chat-msg.assistant .chat-bubble { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 4px 16px 16px 16px; }
 .chat-msg.user .chat-bubble { background: var(--navy); color: #fff; border-radius: 16px 4px 16px 16px; }
+.chat-bubble p { margin: 0 0 8px; }
+.chat-bubble p:last-child { margin-bottom: 0; }
+.chat-bubble ul, .chat-bubble ol { padding-left: 18px; margin: 4px 0 8px; }
+.chat-bubble li { margin-bottom: 3px; }
+.chat-bubble strong { font-weight: 700; }
+.chat-bubble em { font-style: italic; }
+.chat-bubble code { background: rgba(0,0,0,.07); border-radius: 4px; padding: 1px 5px; font-size: 0.85em; font-family: 'Menlo', 'Consolas', monospace; }
+.chat-bubble h1, .chat-bubble h2, .chat-bubble h3 { color: var(--navy); font-weight: 700; margin: 10px 0 4px; font-size: 1em; }
 .chat-input-row { display: flex; gap: 10px; }
 .chat-input-row input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-family: var(--font); outline: none; }
 .chat-input-row input:focus { border-color: var(--navy); }
 
-/* ── Gmail View ──────────────────────────────────────────── */
-#view-gmail { padding: 40px 48px; max-width: 860px; }
-#view-gmail h1 { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 24px; }
+/* ── Settings View ───────────────────────────────────────── */
+#view-settings { padding: 40px 48px; max-width: 860px; }
+#view-settings h1 { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 24px; }
+.settings-section { margin-bottom: 40px; }
+.settings-section-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 16px; }
 .gmail-connect-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 24px; }
 .gmail-scan-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 24px; }
 .gmail-scan-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
@@ -267,7 +331,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <div class="section-label">Upcoming Trips</div>
     <div class="trip-list" id="trip-list"></div>
     <div class="sidebar-footer">
-      <button class="sidebar-link" id="gmail-sidebar-btn" onclick="showGmail()">📧 Gmail</button>
+      <button class="sidebar-link" id="settings-sidebar-btn" onclick="showSettings()">⚙️ Settings</button>
     </div>
   </aside>
 
@@ -298,26 +362,26 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
         <!-- Manual Entry -->
         <div class="form-panel active" id="form-manual">
           <div class="form-group">
-            <label>Trip Name *</label>
-            <input type="text" id="new-trip-name" placeholder="e.g., Nashville Weekend" />
+            <label>Trip Name * <span id="name-generating" style="display:none;font-weight:400;color:var(--muted);font-size:0.8rem">generating…</span></label>
+            <input type="text" id="new-trip-name" placeholder="Auto-generated from destination &amp; dates" />
           </div>
           <div class="form-group">
             <label>Destination</label>
-            <input type="text" id="new-trip-location" placeholder="e.g., Nashville, TN" />
+            <input type="text" id="new-trip-location" placeholder="e.g., Nashville, TN" onblur="suggestTripName()" />
           </div>
           <div class="form-row">
             <div class="form-group" style="margin-bottom:0">
               <label>Start Date</label>
-              <input type="text" id="new-trip-start" placeholder="e.g., Apr 14" />
+              <input type="text" id="new-trip-start" placeholder="e.g., Apr 14" onblur="suggestTripName()" />
             </div>
             <div class="form-group" style="margin-bottom:0">
               <label>End Date</label>
-              <input type="text" id="new-trip-end" placeholder="e.g., Apr 19, 2026" />
+              <input type="text" id="new-trip-end" placeholder="e.g., Apr 19, 2026" onblur="suggestTripName()" />
             </div>
           </div>
           <div class="form-group" style="margin-top:16px">
             <label>Description</label>
-            <textarea id="new-trip-desc" placeholder="What's this trip about?"></textarea>
+            <textarea id="new-trip-desc" placeholder="What's this trip about?" onblur="suggestTripName()"></textarea>
           </div>
           <div class="form-actions">
             <button class="btn-primary" onclick="createTripManual()">Create Trip</button>
@@ -351,80 +415,131 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 
     <!-- Trip Detail -->
     <div class="view" id="view-trip">
-      <div class="trip-header">
-        <div class="trip-header-left">
-          <h1 class="trip-name" id="trip-name-display"></h1>
-          <div class="trip-meta" id="trip-meta-display"></div>
-          <div class="trip-description" id="trip-desc-display"></div>
-          <div style="height:16px"></div>
-        </div>
-        <div class="trip-header-actions">
-          <button class="btn-edit" onclick="showEditTrip()">✏️ Edit Trip</button>
-          <button class="btn-delete-trip" onclick="deleteTrip()">🗑 Delete Trip</button>
-        </div>
-      </div>
-      <div class="trip-tabs">
-        <button class="trip-tab active" onclick="switchTripTab('research',this)">Research</button>
-        <button class="trip-tab" onclick="switchTripTab('itinerary',this)">Itinerary</button>
-        <button class="trip-tab" onclick="switchTripTab('chat',this)">Chat</button>
-      </div>
+      <div class="trip-layout">
 
-      <!-- Research -->
-      <div class="trip-panel active" id="panel-research">
-        <div class="panel-header">
-          <h2>Research</h2>
-          <button class="btn-add-content" onclick="showAddContent()">+ Add Content</button>
-        </div>
-        <div class="content-grid" id="content-grid"></div>
-      </div>
+        <!-- Main panel -->
+        <div id="trip-main">
+          <div class="trip-header">
+            <div class="trip-header-info">
+              <h1 class="trip-name" id="trip-name-display"></h1>
+              <div class="trip-meta" id="trip-meta-display"></div>
+              <div class="trip-description" id="trip-desc-display"></div>
+            </div>
+            <nav class="trip-top-nav">
+              <button class="trip-nav-link" id="nav-chat-btn" onclick="toggleChat()">Chat</button>
+              <span class="trip-nav-sep">|</span>
+              <button class="trip-nav-link" id="nav-itinerary-btn" onclick="toggleItinerary()">Itinerary</button>
+            </nav>
+          </div>
 
-      <!-- Itinerary -->
-      <div class="trip-panel" id="panel-itinerary">
-        <div class="panel-header">
-          <h2>Itinerary</h2>
-        </div>
-        <div id="itinerary-area"></div>
-      </div>
+          <!-- Research -->
+          <div class="trip-panel active" id="panel-research">
+            <div class="content-grid" id="content-grid"></div>
+          </div>
 
-      <!-- Chat -->
-      <div class="trip-panel" id="panel-chat">
-        <div class="chat-wrap">
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input-row">
-            <input type="text" id="chat-input" placeholder="Ask anything about your trip…" onkeydown="if(event.key==='Enter')sendChat()" />
-            <button class="btn-primary" onclick="sendChat()">Send</button>
+          <!-- Itinerary -->
+          <div class="trip-panel" id="panel-itinerary">
+            <div id="itinerary-area"></div>
+          </div>
+
+          <!-- Sticky add content bar (desktop only) -->
+          <div id="add-content-bar">
+            <button onclick="showAddContent()">+ Add Content</button>
           </div>
         </div>
+
+        <!-- Itinerary panel: right panel on desktop only -->
+        <div id="itinerary-panel">
+          <div class="chat-panel-header">
+            <h3>Itinerary</h3>
+            <button class="chat-panel-close" onclick="toggleItinerary()">✕</button>
+          </div>
+          <div id="itinerary-panel-area"></div>
+        </div>
+
+        <!-- Chat panel: right panel on desktop, overlay on mobile -->
+        <div id="chat-panel">
+          <div class="chat-panel-header">
+            <h3>Chat</h3>
+            <button class="chat-panel-close" onclick="toggleChat()">✕</button>
+          </div>
+          <div class="chat-starter-wrap" id="chat-starter-wrap" style="display:none">
+            <button class="chat-starter-chip" id="chat-starter-btn" onclick="submitStarter()"></button>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="location-toggle" id="location-toggle-btn" onclick="toggleLocation()">📍 Use my location</button>
+              <span id="location-error"></span>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" id="chat-input" placeholder="Ask anything about your trip…" onkeydown="if(event.key==='Enter')sendChat()" />
+              <button class="btn-primary" onclick="sendChat()">Send</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <!-- Gmail View -->
-    <div class="view" id="view-gmail">
+    <!-- Bottom Rail (mobile only) -->
+    <div class="bottom-rail" id="bottom-rail">
+      <button class="rail-btn" onclick="showEditTrip()">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+      </button>
+      <button class="rail-btn" id="rail-itinerary" onclick="switchTripTab('itinerary')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Itinerary
+      </button>
+      <button class="rail-btn rail-center" onclick="showAddContent()">+</button>
+      <button class="rail-btn" id="rail-chat" onclick="toggleChat()">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chat
+      </button>
+      <button class="rail-btn active" id="rail-research" onclick="switchTripTab('research')">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Research
+      </button>
+    </div>
+
+    <!-- Settings View -->
+    <div class="view" id="view-settings">
       <div style="padding:40px 48px;max-width:760px">
-        <h1 style="font-size:1.8rem;font-weight:700;color:var(--navy);margin-bottom:24px">Gmail</h1>
+        <h1 style="font-size:1.8rem;font-weight:700;color:var(--navy);margin-bottom:32px">Settings</h1>
 
-        <div class="gmail-connect-card">
-          <div id="gmail-disconnected">
-            <p style="color:var(--muted);font-size:0.9rem;margin-bottom:16px">Connect Gmail to scan your inbox for travel emails.</p>
-            <a href="/api/auth/gmail" class="btn-primary" style="text-decoration:none;display:inline-block">🔗 Connect Gmail</a>
-          </div>
-          <div id="gmail-connected" style="display:none">
-            <div style="display:flex;align-items:center;gap:8px;color:green;font-weight:600">✓ Gmail connected</div>
-          </div>
-        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Connected Accounts</div>
 
-        <div class="gmail-scan-card" id="gmail-scan-card" style="display:none">
-          <h3>Search Emails</h3>
-          <div class="form-group">
-            <label>Add to trip</label>
-            <select id="gmail-trip-select"><option value="">— Select a trip —</option></select>
+          <div class="gmail-connect-card">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <span style="font-size:1.2rem">📧</span>
+              <div>
+                <div style="font-weight:600;font-size:0.95rem">Gmail</div>
+                <div style="font-size:0.82rem;color:var(--muted)">Scan your inbox for travel emails and booking confirmations</div>
+              </div>
+            </div>
+            <div id="gmail-disconnected">
+              <a href="/api/auth/gmail" class="btn-primary" style="text-decoration:none;display:inline-block">Connect Gmail</a>
+            </div>
+            <div id="gmail-connected" style="display:none">
+              <div style="display:flex;align-items:center;gap:8px;color:green;font-weight:600;margin-bottom:12px">✓ Connected</div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Keywords (comma-separated)</label>
-            <input type="text" id="gmail-keywords" placeholder="e.g. hotel, booking, flight" />
+
+          <div class="gmail-scan-card" id="gmail-scan-card" style="display:none">
+            <h3>Search Emails</h3>
+            <div class="form-group">
+              <label>Add to trip</label>
+              <select id="gmail-trip-select"><option value="">— Select a trip —</option></select>
+            </div>
+            <div class="form-group">
+              <label>Keywords (comma-separated)</label>
+              <input type="text" id="gmail-keywords" placeholder="e.g. hotel, booking, flight" />
+            </div>
+            <button class="btn-primary" onclick="scanGmail()" id="scan-btn">🔍 Search Inbox</button>
+            <div class="email-results" id="email-results" style="display:none"></div>
           </div>
-          <button class="btn-primary" onclick="scanGmail()" id="scan-btn">🔍 Search Inbox</button>
-          <div class="email-results" id="email-results" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -538,6 +653,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
       <button class="btn-primary" onclick="submitEditTrip()">Save Changes</button>
       <button class="btn-secondary" onclick="closeModal('modal-edit-trip')">Cancel</button>
     </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+      <button onclick="deleteTrip()" style="background:none;border:none;color:#e53e3e;font-size:0.85rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .12s" onmouseover="this.style.background='rgba(229,62,62,.08)'" onmouseout="this.style.background='none'">Delete Trip</button>
+    </div>
   </div>
 </div>
 
@@ -551,7 +669,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <h2 id="detail-title" style="font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:16px"></h2>
     <img id="detail-thumb" src="" alt="" style="display:none;width:100%;border-radius:10px;margin-bottom:16px">
     <div id="detail-fields" style="display:flex;flex-direction:column;gap:12px"></div>
-    <div id="detail-date" style="font-size:0.8rem;color:var(--muted);margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <div id="detail-date" style="font-size:0.8rem;color:var(--muted)"></div>
+      <button id="detail-delete-btn" onclick="deleteItem()" style="background:none;border:none;color:#e53e3e;font-size:0.85rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .12s" onmouseover="this.style.background='rgba(229,62,62,.08)'" onmouseout="this.style.background='none'">Delete</button>
+    </div>
   </div>
 </div>
 
@@ -566,6 +687,8 @@ let trips = [];
 let activeTripId = null;
 let activeTripTab = 'research';
 let chatHistory = [];
+let chatPanelOpen = false;
+let itineraryPanelOpen = false;
 let pollTimer = null;
 
 const TEMPLATES = [
@@ -582,6 +705,57 @@ const TEMPLATES = [
 // ─────────────────────────────────────────────────
 function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMarkdown(text) {
+  // Escape HTML in raw text first, then selectively re-introduce safe tags
+  const lines = text.split('\n');
+  const out = [];
+  let inUl = false, inOl = false;
+
+  const flushList = () => {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  };
+
+  const inline = (s) => escHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ulM = line.match(/^[\s]*[-*]\s+(.*)/);
+    const olM = line.match(/^[\s]*\d+\.\s+(.*)/);
+    const h3 = line.match(/^###\s+(.*)/);
+    const h2 = line.match(/^##\s+(.*)/);
+    const h1 = line.match(/^#\s+(.*)/);
+
+    if (ulM) {
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      if (!inUl) { out.push('<ul>'); inUl = true; }
+      out.push(`<li>${inline(ulM[1])}</li>`);
+    } else if (olM) {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (!inOl) { out.push('<ol>'); inOl = true; }
+      out.push(`<li>${inline(olM[1])}</li>`);
+    } else if (h3) {
+      flushList(); out.push(`<h3>${inline(h3[1])}</h3>`);
+    } else if (h2) {
+      flushList(); out.push(`<h2>${inline(h2[1])}</h2>`);
+    } else if (h1) {
+      flushList(); out.push(`<h1>${inline(h1[1])}</h1>`);
+    } else if (line.trim() === '') {
+      flushList();
+      // blank line = paragraph break (only add if there's following content)
+      if (out.length && !out[out.length - 1].endsWith('<br>')) out.push('<br>');
+    } else {
+      flushList();
+      out.push(`<p>${inline(line)}</p>`);
+    }
+  }
+  flushList();
+  return out.join('');
 }
 
 let toastTimer;
@@ -660,12 +834,28 @@ function selectTrip(id) {
   activeTripId = id;
   activeTripTab = 'research';
   chatHistory = [];
+  chatPanelOpen = false;
+  itineraryPanelOpen = false;
+  document.getElementById('chat-panel')?.classList.remove('open');
+  document.getElementById('nav-chat-btn')?.classList.remove('active');
+  document.getElementById('rail-chat')?.classList.remove('active');
+  document.getElementById('itinerary-panel')?.classList.remove('open');
+  document.getElementById('nav-itinerary-btn')?.classList.remove('active');
+  document.getElementById('chat-starter-wrap').style.display = 'none';
+  locationEnabled = false;
+  const ltb = document.getElementById('location-toggle-btn');
+  if (ltb) { ltb.textContent = '📍 Use my location'; ltb.classList.remove('active', 'error'); }
+  const lerr = document.getElementById('location-error');
+  if (lerr) { lerr.style.display = 'none'; }
   renderSidebar();
   renderTripDetail();
   showView('trip');
-  // reset tabs
-  document.querySelectorAll('.trip-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  // reset to research tab
   document.querySelectorAll('.trip-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+  ['research', 'itinerary'].forEach(t => {
+    document.getElementById(`rail-${t}`)?.classList.toggle('active', t === 'research');
+  });
+  document.getElementById('nav-itinerary-btn')?.classList.remove('active');
 }
 
 function renderTripDetail() {
@@ -692,8 +882,8 @@ function renderTripDetail() {
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
-  // Update Gmail sidebar highlight
-  document.getElementById('gmail-sidebar-btn').classList.toggle('active', name === 'gmail');
+  document.getElementById('settings-sidebar-btn').classList.toggle('active', name === 'settings');
+  document.getElementById('bottom-rail').classList.toggle('visible', name === 'trip');
 }
 
 function showNewTrip() {
@@ -701,9 +891,9 @@ function showNewTrip() {
   switchFormTab('manual', document.querySelector('.form-tab'));
 }
 
-function showGmail() {
+function showSettings() {
   checkGmailStatus();
-  showView('gmail');
+  showView('settings');
 }
 
 // ─────────────────────────────────────────────────
@@ -731,6 +921,31 @@ function useTemplate(i) {
   document.getElementById('new-trip-desc').value = t.desc_text;
   switchFormTab('manual', document.querySelector('.form-tab'));
   document.querySelector('.form-tab').classList.add('active');
+}
+
+let _suggestTimeout = null;
+async function suggestTripName() {
+  const location = document.getElementById('new-trip-location').value.trim();
+  if (!location) return;
+  const nameField = document.getElementById('new-trip-name');
+  const indicator = document.getElementById('name-generating');
+  clearTimeout(_suggestTimeout);
+  _suggestTimeout = setTimeout(async () => {
+    indicator.style.display = 'inline';
+    const fd = new FormData();
+    fd.append('location', location);
+    fd.append('start_date', document.getElementById('new-trip-start').value);
+    fd.append('end_date', document.getElementById('new-trip-end').value);
+    fd.append('purpose', document.getElementById('new-trip-desc').value);
+    try {
+      const res = await fetch('/api/trips/suggest-name', { method: 'POST', body: fd });
+      if (res.ok) {
+        const { name } = await res.json();
+        nameField.value = name;
+      }
+    } catch {}
+    indicator.style.display = 'none';
+  }, 600);
 }
 
 async function createTripManual() {
@@ -801,24 +1016,82 @@ async function submitEditTrip() {
 async function deleteTrip() {
   const trip = trips.find(t => t.id === activeTripId);
   if (!confirm(`Delete "${trip?.name}"? This cannot be undone.`)) return;
+  closeModal('modal-edit-trip');
   await fetch(`/api/trips/${activeTripId}`, { method: 'DELETE' });
   activeTripId = null;
   await loadTrips();
-  showView(trips.length ? 'empty' : 'empty');
+  showView('empty');
   toast('Trip deleted');
 }
 
 // ─────────────────────────────────────────────────
 // Tabs
 // ─────────────────────────────────────────────────
-function switchTripTab(name, btn) {
+function switchTripTab(name) {
+  // On mobile, close the chat overlay when switching content tabs
+  if (chatPanelOpen && window.innerWidth < 768) {
+    chatPanelOpen = false;
+    document.getElementById('chat-panel').classList.remove('open');
+    document.getElementById('rail-chat')?.classList.remove('active');
+  }
   activeTripTab = name;
-  document.querySelectorAll('.trip-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
   document.querySelectorAll('.trip-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(`panel-${name}`).classList.add('active');
-  if (name === 'chat') renderChatPanel();
+  document.getElementById(`panel-${name}`)?.classList.add('active');
+  ['research', 'itinerary'].forEach(t => {
+    document.getElementById(`rail-${t}`)?.classList.toggle('active', t === name);
+  });
+  document.getElementById('nav-itinerary-btn')?.classList.toggle('active', name === 'itinerary');
   if (name === 'itinerary') renderItineraryPanel();
+}
+
+function _closeItineraryPanel() {
+  itineraryPanelOpen = false;
+  document.getElementById('itinerary-panel').classList.remove('open');
+  document.getElementById('nav-itinerary-btn')?.classList.remove('active');
+}
+
+function _closeChatPanel() {
+  chatPanelOpen = false;
+  document.getElementById('chat-panel').classList.remove('open');
+  document.getElementById('nav-chat-btn')?.classList.remove('active');
+  document.getElementById('rail-chat')?.classList.remove('active');
+}
+
+function toggleItinerary() {
+  const opening = !itineraryPanelOpen;
+  if (chatPanelOpen) _closeChatPanel();
+  if (!opening) { _closeItineraryPanel(); return; }
+  itineraryPanelOpen = true;
+  document.getElementById('itinerary-panel').classList.add('open');
+  document.getElementById('nav-itinerary-btn')?.classList.add('active');
+  renderItineraryPanel();
+}
+
+function toggleChat() {
+  chatPanelOpen = !chatPanelOpen;
+  if (itineraryPanelOpen) _closeItineraryPanel();
+  document.getElementById('chat-panel').classList.toggle('open', chatPanelOpen);
+  document.getElementById('nav-chat-btn')?.classList.toggle('active', chatPanelOpen);
+  document.getElementById('rail-chat')?.classList.toggle('active', chatPanelOpen);
+  if (chatPanelOpen) {
+    const trip = trips.find(t => t.id === activeTripId);
+    const wrap = document.getElementById('chat-starter-wrap');
+    const btn = document.getElementById('chat-starter-btn');
+    if (trip && chatHistory.length === 0) {
+      btn.textContent = `Questions about your ${trip.name}?`;
+      wrap.style.display = 'block';
+    } else {
+      wrap.style.display = 'none';
+    }
+    setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
+  }
+}
+
+function submitStarter() {
+  const text = document.getElementById('chat-starter-btn').textContent;
+  document.getElementById('chat-starter-wrap').style.display = 'none';
+  document.getElementById('chat-input').value = text;
+  sendChat();
 }
 
 function switchFormTab(name, btn) {
@@ -1005,7 +1278,27 @@ function showItemDetail(itemJson) {
   const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
   document.getElementById('detail-date').textContent = added ? `Added ${added}` : '';
 
+  document.getElementById('modal-item-detail').dataset.itemId = item.id;
   openModal('modal-item-detail');
+}
+
+async function deleteItem() {
+  const itemId = document.getElementById('modal-item-detail').dataset.itemId;
+  if (!itemId || !activeTripId) return;
+  const btn = document.getElementById('detail-delete-btn');
+  btn.textContent = 'Deleting…';
+  btn.disabled = true;
+  const res = await fetch(`/api/trips/${activeTripId}/items/${itemId}`, { method: 'DELETE' });
+  if (res.ok) {
+    closeModal('modal-item-detail');
+    await loadTrips();
+    renderContentGrid();
+    toast('Item deleted');
+  } else {
+    btn.textContent = 'Delete';
+    btn.disabled = false;
+    toast('Failed to delete');
+  }
 }
 
 // ─────────────────────────────────────────────────
@@ -1014,22 +1307,22 @@ function showItemDetail(itemJson) {
 function renderItineraryPanel() {
   const trip = trips.find(t => t.id === activeTripId);
   if (!trip) return;
-  const area = document.getElementById('itinerary-area');
-  if (trip.itinerary) {
-    area.innerHTML = `
-      <div style="display:flex;gap:10px;margin-bottom:24px">
-        <button class="btn-primary" onclick="organizeTrip()">🔄 Regenerate</button>
-      </div>
-      <div class="itinerary-content">${escHtml(trip.itinerary)}</div>`;
-  } else {
-    area.innerHTML = `<div class="itinerary-placeholder">
-      <p>No itinerary yet. Generate one from your saved research.</p>
-      <button class="btn-primary" onclick="organizeTrip()" ${!trip.items.length ? 'disabled' : ''}>
-        ✨ Generate Itinerary
-      </button>
-      ${!trip.items.length ? '<p style="margin-top:12px;font-size:0.82rem">Add some content first</p>' : ''}
-    </div>`;
-  }
+  const html = trip.itinerary
+    ? `<div style="display:flex;gap:10px;margin-bottom:24px">
+         <button class="btn-primary" onclick="organizeTrip()">🔄 Regenerate</button>
+       </div>
+       <div class="itinerary-content">${escHtml(trip.itinerary)}</div>`
+    : `<div class="itinerary-placeholder">
+         <p>No itinerary yet. Generate one from your saved research.</p>
+         <button class="btn-primary" onclick="organizeTrip()" ${!trip.items.length ? 'disabled' : ''}>
+           ✨ Generate Itinerary
+         </button>
+         ${!trip.items.length ? '<p style="margin-top:12px;font-size:0.82rem">Add some content first</p>' : ''}
+       </div>`;
+  const a1 = document.getElementById('itinerary-area');
+  const a2 = document.getElementById('itinerary-panel-area');
+  if (a1) a1.innerHTML = html;
+  if (a2) a2.innerHTML = html;
 }
 
 async function organizeTrip() {
@@ -1050,12 +1343,59 @@ async function organizeTrip() {
 // ─────────────────────────────────────────────────
 // Chat
 // ─────────────────────────────────────────────────
-function renderChatPanel() {
-  const msgs = document.getElementById('chat-messages');
-  if (!msgs.children.length && chatHistory.length === 0) {
-    msgs.innerHTML = `<div style="color:var(--muted);font-size:0.88rem;text-align:center;margin-top:20px">
-      Ask me anything about your trip ✈️</div>`;
+let locationEnabled = false;
+
+function toggleLocation() {
+  const btn = document.getElementById('location-toggle-btn');
+  const err = document.getElementById('location-error');
+  err.style.display = 'none';
+  btn.classList.remove('error');
+  if (locationEnabled) {
+    locationEnabled = false;
+    btn.textContent = '📍 Use my location';
+    btn.classList.remove('active');
+    return;
   }
+  if (!navigator.geolocation) {
+    err.textContent = 'Geolocation not supported by your browser.';
+    err.style.display = 'inline';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    () => {
+      locationEnabled = true;
+      btn.textContent = '📍 Using your location';
+      btn.classList.add('active');
+    },
+    () => {
+      btn.classList.add('error');
+      err.textContent = 'Location access denied. Enable in your browser settings.';
+      err.style.display = 'inline';
+    }
+  );
+}
+
+async function getCoords() {
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {
+        // permission revoked mid-session — disable the toggle
+        locationEnabled = false;
+        const btn = document.getElementById('location-toggle-btn');
+        btn.textContent = '📍 Use my location';
+        btn.classList.remove('active');
+        const err = document.getElementById('location-error');
+        err.textContent = 'Location access denied. Enable in your browser settings.';
+        err.style.display = 'inline';
+        resolve(null);
+      }
+    );
+  });
+}
+
+function renderChatPanel() {
+  // Starter chip is shown by toggleChat; nothing else to render here
 }
 
 async function sendChat() {
@@ -1063,12 +1403,19 @@ async function sendChat() {
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
+  document.getElementById('chat-starter-wrap').style.display = 'none';
+
+  // Fetch location before rendering so we know whether to show the pin
+  let coords = null;
+  if (locationEnabled) {
+    coords = await getCoords();
+  }
 
   const msgs = document.getElementById('chat-messages');
-  if (msgs.querySelector('[style*="text-align:center"]')) msgs.innerHTML = '';
 
-  // User bubble
-  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-bubble">${escHtml(msg)}</div></div>`;
+  // User bubble — append 📍 indicator if location was included
+  const locBadge = coords ? ' <span title="Location included" style="font-size:0.75rem;opacity:.7">📍</span>' : '';
+  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-bubble">${escHtml(msg)}${locBadge}</div></div>`;
 
   // Assistant bubble
   const id = 'msg-' + Date.now();
@@ -1079,6 +1426,10 @@ async function sendChat() {
   fd.append('message', msg);
   if (activeTripId) fd.append('trip_id', activeTripId);
   fd.append('history', JSON.stringify(chatHistory));
+  if (coords) {
+    fd.append('latitude', coords.lat);
+    fd.append('longitude', coords.lng);
+  }
 
   const res = await fetch('/api/chat', { method: 'POST', body: fd });
   const reader = res.body.getReader();
@@ -1093,7 +1444,7 @@ async function sendChat() {
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
       if (data === '[DONE]') break;
-      try { reply += JSON.parse(data).text; bubble.textContent = reply; msgs.scrollTop = msgs.scrollHeight; } catch {}
+      try { reply += JSON.parse(data).text; bubble.innerHTML = renderMarkdown(reply); msgs.scrollTop = msgs.scrollHeight; } catch {}
     }
   }
 
