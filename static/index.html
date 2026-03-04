@@ -902,7 +902,7 @@ function renderCard(item) {
   const ext = item.extraction || {};
   const status = ext.status || '';
   const isTikTok = /tiktok\.com/i.test(item.url || '');
-  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? `🔗 LINK` : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : `📎 FILE`;
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? `🔗 LINK` : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : `📎 FILE`;
   const title = ext.title || item.label || item.filename || (item.url ? new URL(item.url).hostname.replace('www.','') : 'Untitled');
   const preview = ext.summary || (item.content ? item.content.replace(/\n/g,' ').slice(0,100) : '');
   const pending = status === 'pending' || (!status && item.type === 'link');
@@ -922,7 +922,7 @@ function showItemDetail(itemJson) {
   const item = JSON.parse(itemJson);
   const ext = item.extraction || {};
   const isTikTok = /tiktok\.com/i.test(item.url || '');
-  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? '🔗 LINK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : '📎 FILE';
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? '🔗 LINK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : '📎 FILE';
   const title = ext.title || item.label || item.filename || 'Untitled';
 
   document.getElementById('detail-type-badge').textContent = typeLabel;

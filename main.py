@@ -606,6 +606,68 @@ async def extract_metadata_background(user_token: str, trip_id: str):
     await asyncio.to_thread(_extract_metadata_sync, user_token, trip_id)
 
 
+_IMAGE_SYSTEM = (
+    "You extract travel-relevant details from images for a travel planning app. "
+    "The image may be a screenshot of a booking confirmation, hotel, restaurant, attraction, "
+    "map, itinerary, flight details, or any travel content. "
+    "Only include fields with clearly visible values — never guess. "
+    "status: 'extracted' = found useful info; 'low_confidence' = very little info. "
+    "category: one of hotel | restaurant | flight | attraction | transport | other."
+)
+
+
+def _analyze_image_sync(user_token: str, trip_id: str, item_id: str, file_id: str, filename: str):
+    """Analyze an uploaded image with Claude vision and store extracted travel details."""
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+        client = anthropic.Anthropic(api_key=api_key)
+
+        response = client.beta.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            system=_IMAGE_SYSTEM,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "file", "file_id": file_id}},
+                    {"type": "text", "text": (
+                        f"This is a travel image (filename: {filename}). "
+                        "Extract all travel details visible in it — booking references, "
+                        "dates, addresses, prices, names, and anything else useful for trip planning."
+                    )},
+                ],
+            }],
+            betas=["files-api-2025-04-14"],
+            output_config={"format": {"type": "json_schema", "schema": _LINK_EXTRACTION_SCHEMA}},
+        )
+
+        ext = json.loads(response.content[0].text)
+
+        lines = [f"Image: {filename}", f"Title: {ext['title']}", f"Type: {ext['category']}", f"Summary: {ext['summary']}"]
+        for k in ["address", "city", "country", "price", "check_in", "check_out",
+                  "hours", "phone", "cuisine", "airline", "flight_number",
+                  "departure", "arrival", "rating", "notes"]:
+            if ext.get(k):
+                lines.append(f"{k.replace('_', ' ').title()}: {ext[k]}")
+
+        _update_item(user_token, trip_id, item_id, {
+            "extraction": ext,
+            "content": "\n".join(lines),
+        })
+
+    except Exception:
+        _update_item(user_token, trip_id, item_id, {
+            "extraction": {"status": "failed", "title": filename, "category": "other", "summary": ""},
+            "content": f"Image: {filename}\n[Analysis failed]",
+        })
+
+
+async def analyze_image_background(user_token: str, trip_id: str, item_id: str, file_id: str, filename: str):
+    await asyncio.to_thread(_analyze_image_sync, user_token, trip_id, item_id, file_id, filename)
+
+
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
     request: Request,
@@ -643,12 +705,14 @@ async def upload_content(
         raw = await file.read()
         mime = file.content_type or "application/octet-stream"
         uploaded = client.beta.files.upload(file=(file.filename, raw, mime))
+        file_kind = "document" if mime == "application/pdf" else "image"
         item["type"] = "file"
-        item["file_kind"] = "document" if mime == "application/pdf" else "image"
+        item["file_kind"] = file_kind
         item["file_id"] = uploaded.id
         item["filename"] = file.filename
         item["mime"] = mime
         item["content"] = None
+        item["extraction"] = {"status": "pending", "title": file.filename, "category": "other", "summary": ""}
 
     index["trips"][trip_id]["items"].append(item)
     index["trips"][trip_id]["itinerary"] = None
@@ -658,6 +722,8 @@ async def upload_content(
     background_tasks.add_task(extract_metadata_background, token, trip_id)
     if content_type == "link":
         background_tasks.add_task(extract_link_background, token, trip_id, item["id"], url)
+    if item.get("file_kind") == "image":
+        background_tasks.add_task(analyze_image_background, token, trip_id, item["id"], item["file_id"], file.filename)
 
     return {"ok": True, "item": item}
 
