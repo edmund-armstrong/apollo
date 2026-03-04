@@ -182,6 +182,22 @@ async def fetch_url_text(url: str) -> str:
         return parser.get_text()
 
 
+def _is_tiktok_url(url: str) -> bool:
+    return bool(re.search(r"tiktok\.com", url, re.I))
+
+
+def _fetch_tiktok_oembed(url: str) -> dict:
+    """Fetch TikTok video metadata via oEmbed (no API key required)."""
+    with httpx.Client(follow_redirects=True, timeout=15) as client:
+        resp = client.get(
+            "https://www.tiktok.com/oembed",
+            params={"url": url},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
 _FETCH_UA_LIST = [
     # Many CDNs (Akamai, Cloudflare) explicitly allow known search crawlers
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -281,6 +297,35 @@ _LINK_SYSTEM = (
 
 def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
     try:
+        # TikTok: use oEmbed instead of scraping
+        if _is_tiktok_url(url):
+            try:
+                oembed = _fetch_tiktok_oembed(url)
+                ext = {
+                    "status": "extracted",
+                    "title": oembed.get("title", "TikTok video"),
+                    "category": "other",
+                    "summary": f"By @{oembed.get('author_name', 'unknown')} on TikTok",
+                    "thumbnail_url": oembed.get("thumbnail_url", ""),
+                    "embed_html": oembed.get("html", ""),
+                }
+                lines = [
+                    f"Source: {url}",
+                    f"Title: {ext['title']}",
+                    f"Creator: @{oembed.get('author_name', '')}",
+                    f"Platform: TikTok",
+                ]
+                _update_item(user_token, trip_id, item_id, {
+                    "extraction": ext,
+                    "content": "\n".join(lines),
+                })
+            except Exception:
+                _update_item(user_token, trip_id, item_id, {
+                    "extraction": {"status": "failed", "title": "TikTok video", "category": "other", "summary": ""},
+                    "content": f"Source: {url}\n[TikTok oEmbed failed — raw URL preserved]",
+                })
+            return
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             return
@@ -824,6 +869,26 @@ async def add_email_to_trip(
     index["trips"][trip_id]["itinerary"] = None
     save_user_index(token, index)
     return {"ok": True, "item": item}
+
+
+# ---------------------------------------------------------------------------
+# PWA share target
+# ---------------------------------------------------------------------------
+
+@app.get("/share", response_class=HTMLResponse)
+async def share_target(request: Request, url: Optional[str] = None, text: Optional[str] = None, title: Optional[str] = None):
+    """Receives shared URLs from the Android share sheet (PWA share target)."""
+    if not request.cookies.get("apollo_user"):
+        return RedirectResponse("/")
+    # Extract a URL from whichever param TikTok/other apps populated
+    shared_url = url or ""
+    if not shared_url and text:
+        # Some apps put the URL in the text field
+        match = re.search(r"https?://\S+", text)
+        if match:
+            shared_url = match.group(0)
+    # Pass it to the app via a query param so JS can pre-fill the capture box
+    return RedirectResponse(f"/?share={shared_url}" if shared_url else "/")
 
 
 # ---------------------------------------------------------------------------

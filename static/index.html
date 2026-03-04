@@ -4,6 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Apollo ✈️</title>
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#667eea">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Apollo">
 <style>
   :root {
     --bg: #0f1117;
@@ -406,6 +411,13 @@ async function init() {
     history.replaceState({}, '', '/');
     switchTab('gmail');
   }
+  const sharedUrl = new URLSearchParams(location.search).get('share');
+  if (sharedUrl) {
+    history.replaceState({}, '', '/');
+    document.getElementById('capture-text').value = sharedUrl;
+    switchTab('capture');
+    toast('URL ready to save — select a trip and tap Add');
+  }
 }
 
 async function loadTrips() {
@@ -656,11 +668,19 @@ function renderLinkItem(item) {
   const warnHtml = status === 'low_confidence'
     ? '<div class="link-warn">⚠️ Limited info — paste page text for more</div>' : '';
 
+  const isTikTok = /tiktok\.com/i.test(item.url || '');
+  const thumbHtml = isTikTok && ext.thumbnail_url
+    ? `<div style="margin:8px 0 4px"><img src="${escHtml(ext.thumbnail_url)}" alt="TikTok thumbnail"
+         style="width:100%;max-width:280px;border-radius:10px;display:block"></div>` : '';
+  const tikTokBadge = isTikTok ? `<span style="font-size:0.72rem;background:#010101;color:#fff;
+    padding:2px 7px;border-radius:20px;margin-left:6px;vertical-align:middle">TikTok</span>` : '';
+
   return `<div class="feed-item">
-    <div class="feed-icon">${icon}</div>
+    <div class="feed-icon">${isTikTok ? '🎵' : icon}</div>
     <div class="feed-content">
-      <div class="link-title">${escHtml(ext.title || urlShort)}</div>
+      <div class="link-title">${escHtml(ext.title || urlShort)}${tikTokBadge}</div>
       ${ext.summary ? `<div class="link-summary">${escHtml(ext.summary)}</div>` : ''}
+      ${thumbHtml}
       ${warnHtml}${expandHtml}
     </div>
   </div>`;
