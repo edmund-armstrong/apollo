@@ -668,6 +668,46 @@ async def analyze_image_background(user_token: str, trip_id: str, item_id: str, 
     await asyncio.to_thread(_analyze_image_sync, user_token, trip_id, item_id, file_id, filename)
 
 
+@app.post("/api/trips/{trip_id}/import-bookmarks")
+async def import_bookmarks(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    trip_id: str,
+    file: UploadFile = File(...),
+):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    content = (await file.read()).decode("utf-8", errors="replace")
+
+    # Chrome exports bookmarks as: <A HREF="url" ...>title</A>
+    pattern = re.compile(r'<A\s+HREF="([^"]+)"[^>]*>([^<]*)</A>', re.IGNORECASE)
+    matches = pattern.findall(content)
+    bookmarks = [(url, title.strip()) for url, title in matches if url.lower().startswith("http")][:75]
+
+    if not bookmarks:
+        raise HTTPException(status_code=400, detail="No bookmarks found — make sure you exported from Chrome as HTML")
+
+    for url, title in bookmarks:
+        item = {
+            "id": str(uuid.uuid4())[:8],
+            "type": "link",
+            "label": title or "",
+            "url": url,
+            "content": f"Source: {url}",
+            "extraction": {"status": "pending", "title": title or _url_to_title(url), "category": "other", "summary": ""},
+            "file_id": None,
+        }
+        index["trips"][trip_id]["items"].append(item)
+        background_tasks.add_task(extract_link_background, token, trip_id, item["id"], url)
+
+    index["trips"][trip_id]["itinerary"] = None
+    save_user_index(token, index)
+    return {"ok": True, "imported": len(bookmarks)}
+
+
 @app.post("/api/trips/{trip_id}/upload")
 async def upload_content(
     request: Request,

@@ -445,6 +445,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
       <button class="content-type-tab active" onclick="switchContentType('link',this)">Link</button>
       <button class="content-type-tab" onclick="switchContentType('text',this)">Text</button>
       <button class="content-type-tab" onclick="switchContentType('file',this)">File</button>
+      <button class="content-type-tab" onclick="switchContentType('bookmarks',this)">Bookmarks</button>
     </div>
 
     <!-- Link -->
@@ -482,8 +483,23 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
       <div id="file-chosen-label" style="font-size:0.85rem;color:var(--muted);margin-top:8px;text-align:center"></div>
     </div>
 
+    <!-- Bookmarks -->
+    <div id="add-bookmarks-panel" style="display:none">
+      <div style="background:#f0f4ff;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:0.85rem;color:var(--navy);line-height:1.6">
+        <strong>How to export from Chrome:</strong><br>
+        Open Chrome → Bookmarks menu → Bookmark manager → ⋮ (top right) → <em>Export bookmarks</em> → save the HTML file
+      </div>
+      <div class="upload-zone" style="padding:32px 24px" onclick="document.getElementById('bookmarks-file-input').click()">
+        <div style="font-size:2rem;margin-bottom:8px">🔖</div>
+        <p style="margin-bottom:12px;font-size:0.88rem;color:var(--muted)">Upload your Chrome bookmarks HTML file</p>
+        <button class="btn-primary" type="button" onclick="event.stopPropagation();document.getElementById('bookmarks-file-input').click()">Choose File</button>
+        <input type="file" id="bookmarks-file-input" style="display:none" accept=".html,.htm" onchange="updateBookmarksLabel(this)" />
+      </div>
+      <div id="bookmarks-chosen-label" style="font-size:0.85rem;color:var(--muted);margin-top:8px;text-align:center"></div>
+    </div>
+
     <div class="form-actions" style="margin-top:24px">
-      <button class="btn-primary" onclick="submitAddContent()">Add Content</button>
+      <button class="btn-primary" id="add-content-btn" onclick="submitAddContent()">Add Content</button>
       <button class="btn-secondary" onclick="closeModal('modal-add-content')">Cancel</button>
     </div>
   </div>
@@ -828,6 +844,9 @@ function showAddContent() {
   document.getElementById('add-link-panel').style.display = 'block';
   document.getElementById('add-text-panel').style.display = 'none';
   document.getElementById('add-file-panel').style.display = 'none';
+  document.getElementById('add-bookmarks-panel').style.display = 'none';
+  document.getElementById('add-content-btn').textContent = 'Add Content';
+  document.getElementById('add-content-btn').onclick = submitAddContent;
   openModal('modal-add-content');
 }
 
@@ -838,11 +857,44 @@ function switchContentType(type, btn) {
   document.getElementById('add-link-panel').style.display = type === 'link' ? 'block' : 'none';
   document.getElementById('add-text-panel').style.display = type === 'text' ? 'block' : 'none';
   document.getElementById('add-file-panel').style.display = type === 'file' ? 'block' : 'none';
+  document.getElementById('add-bookmarks-panel').style.display = type === 'bookmarks' ? 'block' : 'none';
+  const btn2 = document.getElementById('add-content-btn');
+  if (type === 'bookmarks') {
+    btn2.textContent = 'Import Bookmarks';
+    btn2.onclick = importBookmarks;
+  } else {
+    btn2.textContent = 'Add Content';
+    btn2.onclick = submitAddContent;
+  }
 }
 
 function updateFileLabel(input) {
   const label = input.files[0] ? input.files[0].name : '';
   document.getElementById('file-chosen-label').textContent = label;
+}
+
+function updateBookmarksLabel(input) {
+  const label = input.files[0] ? input.files[0].name : '';
+  document.getElementById('bookmarks-chosen-label').textContent = label;
+}
+
+async function importBookmarks() {
+  if (!activeTripId) return;
+  const file = document.getElementById('bookmarks-file-input').files[0];
+  if (!file) { toast('Choose a bookmarks HTML file first'); return; }
+  const btn = document.getElementById('add-content-btn');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`/api/trips/${activeTripId}/import-bookmarks`, { method: 'POST', body: fd });
+  btn.disabled = false; btn.textContent = 'Import Bookmarks';
+  if (!res.ok) { const e = await res.json().catch(()=>{}); toast(e?.detail || 'Import failed'); return; }
+  const data = await res.json();
+  closeModal('modal-add-content');
+  await loadTrips();
+  renderContentGrid();
+  startPollingIfNeeded();
+  toast(`Imported ${data.imported} bookmark${data.imported === 1 ? '' : 's'} — extracting details in background`);
 }
 
 async function submitAddContent() {
