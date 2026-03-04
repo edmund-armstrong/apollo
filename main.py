@@ -490,7 +490,14 @@ async def list_trips(request: Request):
 
 
 @app.post("/api/trips")
-async def create_trip(request: Request, name: Optional[str] = Form(None)):
+async def create_trip(
+    request: Request,
+    name: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+):
     token = get_user_token(request)
     index = load_user_index(token)
     trip_id = str(uuid.uuid4())[:8]
@@ -498,23 +505,41 @@ async def create_trip(request: Request, name: Optional[str] = Form(None)):
     index["trips"][trip_id] = {
         "id": trip_id,
         "name": auto_name,
+        "location": (location or "").strip(),
+        "start_date": (start_date or "").strip(),
+        "end_date": (end_date or "").strip(),
+        "description": (description or "").strip(),
         "items": [],
         "itinerary": None,
         "metadata": {},
+        "created_at": datetime.now().isoformat(),
     }
     save_user_index(token, index)
     return index["trips"][trip_id]
 
 
-@app.patch("/api/trips/{trip_id}/rename")
-async def rename_trip(request: Request, trip_id: str, name: str = Form(...)):
+@app.patch("/api/trips/{trip_id}")
+async def edit_trip(
+    request: Request,
+    trip_id: str,
+    name: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+):
     token = get_user_token(request)
     index = load_user_index(token)
     if trip_id not in index["trips"]:
         raise HTTPException(status_code=404, detail="Trip not found")
-    index["trips"][trip_id]["name"] = name.strip()
+    trip = index["trips"][trip_id]
+    if name is not None: trip["name"] = name.strip()
+    if location is not None: trip["location"] = location.strip()
+    if start_date is not None: trip["start_date"] = start_date.strip()
+    if end_date is not None: trip["end_date"] = end_date.strip()
+    if description is not None: trip["description"] = description.strip()
     save_user_index(token, index)
-    return {"ok": True}
+    return {"ok": True, "trip": trip}
 
 
 @app.delete("/api/trips/{trip_id}")

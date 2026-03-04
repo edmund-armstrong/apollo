@@ -5,386 +5,541 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Apollo ✈️</title>
 <link rel="manifest" href="/static/manifest.json">
-<meta name="theme-color" content="#667eea">
+<meta name="theme-color" content="#1e2235">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Apollo">
 <style>
-  :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --border: #2a2d3d;
-    --accent: #6c8eff;
-    --accent2: #a78bfa;
-    --text: #e8eaf6;
-    --muted: #6b7280;
-    --success: #34d399;
-    --danger: #f87171;
-    --warn: #fbbf24;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg); color: var(--text);
-    min-height: 100vh; display: flex; flex-direction: column;
-  }
-  header {
-    padding: 14px 20px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px;
-    background: var(--surface); flex-shrink: 0;
-  }
-  header h1 { font-size: 1.25rem; font-weight: 700; }
-  .tabs {
-    display: flex; border-bottom: 1px solid var(--border);
-    background: var(--surface); padding: 0 20px; flex-shrink: 0;
-  }
-  .tab {
-    padding: 11px 18px; cursor: pointer; font-size: 0.88rem;
-    color: var(--muted); border-bottom: 2px solid transparent;
-    transition: all 0.2s; user-select: none;
-  }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab:hover:not(.active) { color: var(--text); }
-  .panel { display: none; flex: 1; overflow-y: auto; }
-  .panel.active { display: flex; flex-direction: column; }
+/* ── Reset & Variables ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff;
+  --sidebar-bg: #f9fafb;
+  --border: #e5e7eb;
+  --text: #111827;
+  --muted: #6b7280;
+  --navy: #1e2235;
+  --navy-hover: #2d3452;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --accent: #667eea;
+  --radius: 10px;
+  --sidebar-w: 280px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
 
-  /* ── Trip Shelf ── */
-  .shelf {
-    padding: 14px 20px 10px;
-    display: flex; gap: 8px; align-items: center;
-    overflow-x: auto; flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .shelf::-webkit-scrollbar { display: none; }
-  .shelf-chip {
-    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
-    cursor: pointer; font-size: 0.82rem; white-space: nowrap;
-    transition: all 0.15s; background: var(--bg); flex-shrink: 0;
-  }
-  .shelf-chip:hover { border-color: var(--muted); }
-  .shelf-chip.active { border-color: var(--accent); background: #1e2448; color: var(--accent); }
-  .shelf-chip.new-chip {
-    border-color: var(--accent); color: var(--accent);
-    background: transparent; font-weight: 600;
-  }
-  .shelf-chip.new-chip:hover { background: #1e2448; }
+/* ── Layout ─────────────────────────────────────────────── */
+.app { display: flex; height: 100vh; }
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--sidebar-bg); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 24px 16px 16px;
+  overflow-y: auto;
+}
+.main-area { flex: 1; overflow-y: auto; background: var(--bg); }
 
-  /* ── Notebook ── */
-  .notebook-wrap {
-    flex: 1; display: flex; flex-direction: column;
-    padding: 20px; gap: 12px; max-width: 740px; width: 100%; margin: 0 auto;
-  }
-  .trip-header {
-    display: flex; align-items: center; gap: 10px;
-  }
-  .trip-name-input {
-    background: transparent; border: none; border-bottom: 1px solid transparent;
-    color: var(--text); font-size: 1.1rem; font-weight: 600;
-    padding: 2px 4px; outline: none; flex: 1;
-    transition: border-color 0.2s;
-  }
-  .trip-name-input:hover, .trip-name-input:focus { border-bottom-color: var(--border); }
-  .item-count { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
-  .notebook-area {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; overflow: hidden;
-  }
-  .notebook-area textarea {
-    width: 100%; background: transparent; border: none;
-    color: var(--text); font-size: 0.95rem; padding: 16px;
-    min-height: 120px; resize: none; outline: none;
-    font-family: inherit; line-height: 1.6;
-  }
-  .notebook-area textarea::placeholder { color: var(--muted); }
-  .capture-toolbar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 14px; border-top: 1px solid var(--border);
-    background: var(--bg);
-  }
-  .tool-btn {
-    padding: 7px 13px; border-radius: 8px; border: 1px solid var(--border);
-    background: transparent; color: var(--muted); cursor: pointer;
-    font-size: 0.82rem; transition: all 0.15s;
-  }
-  .tool-btn:hover { color: var(--text); border-color: var(--muted); }
-  .tool-btn.recording { color: var(--danger); border-color: var(--danger); }
-  .add-btn {
-    margin-left: auto; padding: 7px 18px; border-radius: 8px;
-    background: var(--accent); color: #fff; border: none;
-    font-size: 0.88rem; font-weight: 600; cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .add-btn:hover { opacity: 0.85; }
-  .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* ── Sidebar ─────────────────────────────────────────────── */
+.brand { font-size: 1.25rem; font-weight: 700; color: var(--navy); margin-bottom: 20px; padding: 0 4px; }
+.btn-new-trip {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 12px 16px; background: var(--navy); color: #fff;
+  border: none; border-radius: var(--radius); font-size: 0.95rem;
+  font-weight: 600; cursor: pointer; margin-bottom: 24px; transition: background .15s;
+}
+.btn-new-trip:hover { background: var(--navy-hover); }
+.section-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); padding: 0 4px; margin-bottom: 8px; }
+.trip-list { display: flex; flex-direction: column; gap: 2px; }
+.trip-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  border-radius: var(--radius); cursor: pointer; transition: background .12s;
+}
+.trip-item:hover { background: rgba(0,0,0,.04); }
+.trip-item.active { background: var(--navy); color: #fff; }
+.trip-item.active .trip-item-date { color: rgba(255,255,255,.6); }
+.trip-pin { font-size: 0.85rem; margin-top: 2px; flex-shrink: 0; }
+.trip-item-name { font-size: 0.9rem; font-weight: 600; line-height: 1.3; }
+.trip-item-date { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+.sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+.sidebar-link {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 12px; background: none; border: none; border-radius: var(--radius);
+  font-size: 0.88rem; color: var(--muted); cursor: pointer; transition: background .12s; text-align: left;
+}
+.sidebar-link:hover { background: rgba(0,0,0,.05); color: var(--text); }
+.sidebar-link.active { color: var(--navy); font-weight: 600; background: rgba(30,34,53,.06); }
 
-  /* ── Feed ── */
-  .feed-header {
-    font-size: 0.75rem; color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.5px; margin-top: 4px;
-  }
-  .feed-items { display: flex; flex-direction: column; gap: 8px; }
-  .feed-item {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; padding: 12px 14px;
-    display: flex; align-items: flex-start; gap: 10px;
-  }
-  .feed-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
-  .feed-content { flex: 1; min-width: 0; }
-  .feed-label { font-size: 0.82rem; color: var(--muted); margin-bottom: 2px; }
-  .feed-preview {
-    font-size: 0.88rem; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .feed-url { font-size: 0.8rem; color: var(--accent); }
+/* ── Views ───────────────────────────────────────────────── */
+.view { display: none; }
+.view.active { display: block; }
 
-  /* ── Link extraction ── */
-  .link-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
-  .link-summary { font-size: 0.82rem; color: var(--muted); line-height: 1.4; margin-top: 2px; }
-  .link-pending { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-  .link-warn { font-size: 0.79rem; color: var(--warn); margin-top: 3px; }
-  .link-expand { font-size: 0.74rem; color: var(--accent); cursor: pointer; margin-top: 5px; display: inline-block; user-select: none; }
-  .link-expanded { display: none; margin-top: 7px; border-top: 1px solid var(--border); padding-top: 7px; }
-  .link-expanded.open { display: block; }
-  .detail-line { font-size: 0.78rem; color: var(--muted); padding: 1px 0; }
+/* ── Empty State ─────────────────────────────────────────── */
+#view-empty { height: 100vh; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; text-align: center; }
+#view-empty.active { display: flex; }
+.empty-icon { font-size: 3rem; }
+#view-empty h2 { font-size: 1.5rem; font-weight: 700; color: var(--navy); }
+#view-empty p { color: var(--muted); font-size: 0.95rem; }
 
-  /* ── Empty state ── */
-  .empty-notebook {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    text-align: center; padding: 40px 20px; gap: 12px;
-  }
-  .empty-notebook .icon { font-size: 3rem; }
-  .empty-notebook h2 { font-size: 1.1rem; font-weight: 600; }
-  .empty-notebook p { color: var(--muted); font-size: 0.9rem; max-width: 280px; }
+/* ── New Trip Form ───────────────────────────────────────── */
+#view-new-trip { padding: 40px 48px; max-width: 900px; }
+.new-trip-title { font-size: 2rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+.new-trip-sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 28px; }
+.form-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+.form-tab {
+  padding: 10px 20px; font-size: 0.9rem; font-weight: 500; color: var(--muted);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; transition: color .15s; margin-bottom: -1px;
+}
+.form-tab.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+.form-panel { display: none; }
+.form-panel.active { display: block; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.form-group label { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.form-group input, .form-group textarea, .form-group select {
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9rem; font-family: var(--font); outline: none; transition: border-color .15s; background: var(--bg);
+}
+.form-group input:focus, .form-group textarea:focus { border-color: var(--navy); }
+.form-group textarea { resize: vertical; min-height: 80px; }
+.form-actions { display: flex; gap: 10px; margin-top: 8px; }
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 60px 40px; text-align: center; cursor: pointer;
+  transition: border-color .15s; margin-bottom: 24px;
+}
+.upload-zone:hover, .upload-zone.dragging { border-color: var(--navy); }
+.upload-icon { font-size: 2.5rem; margin-bottom: 12px; color: #9ca3af; }
+.upload-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+.upload-zone p { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+.template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+.template-card {
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+  cursor: pointer; transition: all .15s;
+}
+.template-card:hover { border-color: var(--navy); background: rgba(30,34,53,.02); }
+.template-card .t-icon { font-size: 1.8rem; margin-bottom: 8px; }
+.template-card h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+.template-card p { font-size: 0.78rem; color: var(--muted); }
 
-  /* ── Shared cards ── */
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 18px;
-  }
-  .card h3 {
-    font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .padded { padding: 20px; max-width: 740px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-  input, textarea, select {
-    width: 100%; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); border-radius: 8px; padding: 10px 14px;
-    font-size: 0.92rem; font-family: inherit; outline: none;
-    transition: border-color 0.2s;
-  }
-  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
-  textarea { resize: vertical; min-height: 90px; }
-  .btn {
-    padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
-    font-size: 0.88rem; font-weight: 600; transition: all 0.15s;
-  }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { opacity: 0.85; }
-  .btn-secondary { background: var(--border); color: var(--text); }
-  .btn-sm { padding: 6px 13px; font-size: 0.8rem; }
-  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .flex-1 { flex: 1; }
+/* ── Trip Detail ─────────────────────────────────────────── */
+#view-trip { min-height: 100vh; }
+.trip-header {
+  padding: 36px 48px 0; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+}
+.trip-header-left { flex: 1; }
+.trip-name { font-size: 2rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+.trip-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; flex-wrap: wrap; }
+.trip-meta-item { display: flex; align-items: center; gap: 5px; }
+.trip-description { font-size: 0.92rem; color: var(--text); margin-bottom: 0; }
+.trip-header-actions { display: flex; gap: 10px; flex-shrink: 0; margin-top: 4px; }
+.btn-edit { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all .15s; }
+.btn-edit:hover { border-color: var(--navy); color: var(--navy); }
+.btn-delete-trip { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid transparent; border-radius: 8px; background: none; font-size: 0.85rem; font-weight: 500; color: var(--danger); cursor: pointer; transition: all .15s; }
+.btn-delete-trip:hover { background: rgba(220,38,38,.06); }
+.trip-tabs { display: flex; gap: 4px; padding: 0 48px; margin-top: 20px; }
+.trip-tab {
+  padding: 8px 16px; font-size: 0.88rem; font-weight: 500; color: var(--muted);
+  background: var(--sidebar-bg); border: 1px solid var(--border);
+  border-radius: 20px; cursor: pointer; transition: all .15s;
+}
+.trip-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 600; }
+.trip-tab:hover:not(.active) { background: #f3f4f6; }
+.trip-panel { display: none; padding: 32px 48px; }
+.trip-panel.active { display: block; }
 
-  /* ── Itinerary ── */
-  #itinerary-output {
-    white-space: pre-wrap; line-height: 1.7; font-size: 0.92rem;
-    max-height: 520px; overflow-y: auto;
-  }
-  #itinerary-output strong { color: var(--accent2); }
+/* ── Research Panel ──────────────────────────────────────── */
+.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.panel-header h2 { font-size: 1.4rem; font-weight: 700; color: var(--navy); }
+.btn-add-content {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 18px; background: var(--navy); color: #fff;
+  border: none; border-radius: var(--radius); font-size: 0.88rem;
+  font-weight: 600; cursor: pointer; transition: background .15s;
+}
+.btn-add-content:hover { background: var(--navy-hover); }
+.content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.content-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px; cursor: pointer; transition: all .15s; background: #fff;
+}
+.content-card:hover { border-color: #d1d5db; box-shadow: 0 2px 8px rgba(0,0,0,.06); transform: translateY(-1px); }
+.card-type { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+.card-title { font-size: 0.95rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; line-height: 1.3; }
+.card-preview { font-size: 0.82rem; color: var(--muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-thumb { width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
+.card-pending { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+.spinner { display: inline-block; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-cards { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-cards p { margin-bottom: 16px; font-size: 0.92rem; }
 
-  /* ── Chat ── */
-  #chat-messages {
-    flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-    gap: 12px; min-height: 300px; max-height: 480px;
-  }
-  .msg {
-    max-width: 78%; padding: 11px 15px; border-radius: 12px;
-    font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap;
-  }
-  .msg-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
-  .msg-assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-  .msg-assistant strong { color: var(--accent2); }
-  .geo-badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 0.78rem; color: var(--success); cursor: pointer;
-    padding: 4px 10px; border: 1px solid var(--success); border-radius: 20px;
-  }
-  .geo-badge.off { color: var(--muted); border-color: var(--muted); }
+/* ── Itinerary Panel ─────────────────────────────────────── */
+.itinerary-actions { display: flex; gap: 10px; margin-bottom: 24px; }
+.itinerary-content { background: var(--sidebar-bg); border-radius: var(--radius); padding: 24px; line-height: 1.8; font-size: 0.92rem; white-space: pre-wrap; }
+.itinerary-content h1, .itinerary-content h2, .itinerary-content h3 { color: var(--navy); margin: 16px 0 8px; }
+.itinerary-placeholder { text-align: center; padding: 60px 20px; color: var(--muted); }
+.itinerary-placeholder p { margin-bottom: 16px; }
 
-  /* ── Gmail ── */
-  .email-card {
-    background: var(--bg); border: 1px solid var(--border);
-    border-radius: 10px; padding: 14px; display: flex;
-    flex-direction: column; gap: 6px;
-  }
-  .email-card .subject { font-weight: 600; font-size: 0.9rem; }
-  .email-card .meta { font-size: 0.76rem; color: var(--muted); }
-  .email-card .snippet { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+/* ── Chat Panel ──────────────────────────────────────────── */
+.chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 280px); min-height: 400px; }
+.chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+.chat-msg { display: flex; gap: 10px; max-width: 85%; }
+.chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.chat-bubble {
+  padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.6;
+}
+.chat-msg.assistant .chat-bubble { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 4px 16px 16px 16px; }
+.chat-msg.user .chat-bubble { background: var(--navy); color: #fff; border-radius: 16px 4px 16px 16px; }
+.chat-input-row { display: flex; gap: 10px; }
+.chat-input-row input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-family: var(--font); outline: none; }
+.chat-input-row input:focus { border-color: var(--navy); }
 
-  /* ── Toast ── */
-  #toast {
-    position: fixed; bottom: 20px; right: 20px;
-    background: var(--surface); border: 1px solid var(--border);
-    padding: 10px 18px; border-radius: 10px; font-size: 0.86rem;
-    opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 999;
-  }
-  #toast.show { opacity: 1; }
-  .spinner { display: inline-block; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* ── Gmail View ──────────────────────────────────────────── */
+#view-gmail { padding: 40px 48px; max-width: 860px; }
+#view-gmail h1 { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 24px; }
+.gmail-connect-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 24px; }
+.gmail-scan-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 24px; }
+.gmail-scan-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
+.email-results { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.email-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.email-card .email-subject { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+.email-card .email-meta { font-size: 0.76rem; color: var(--muted); margin-bottom: 6px; }
+.email-card .email-snippet { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+/* ── Modals ──────────────────────────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.4); z-index: 100;
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff; border-radius: 16px; padding: 32px;
+  width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15); position: relative;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.modal-header h2 { font-size: 1.2rem; font-weight: 700; color: var(--navy); }
+.modal-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; line-height: 1; }
+.modal-close:hover { background: var(--sidebar-bg); color: var(--text); }
+.content-type-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.content-type-tab { padding: 8px 16px; font-size: 0.85rem; font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
+.content-type-tab.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn-primary {
+  padding: 10px 20px; background: var(--navy); color: #fff;
+  border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.btn-primary:hover { background: var(--navy-hover); }
+.btn-primary:disabled { opacity: .5; cursor: default; }
+.btn-secondary {
+  padding: 10px 20px; background: #fff; color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem;
+  font-weight: 500; cursor: pointer; transition: all .15s;
+}
+.btn-secondary:hover { border-color: #9ca3af; }
+.btn-danger { padding: 10px 20px; background: none; color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; font-size: 0.9rem; font-weight: 500; cursor: pointer; }
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--navy); color: #fff; padding: 10px 20px; border-radius: 20px;
+  font-size: 0.88rem; font-weight: 500; opacity: 0; transition: all .25s;
+  z-index: 200; pointer-events: none; white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
+<div class="app">
 
-<header>
-  <span style="font-size:1.4rem">✈️</span>
-  <h1>Apollo</h1>
-  <span style="margin-left:auto;font-size:0.78rem;color:var(--muted)">AI Travel Planner</span>
-</header>
-
-<div class="tabs">
-  <div class="tab active" onclick="switchTab('capture')">📓 Capture</div>
-  <div class="tab" onclick="switchTab('gmail')">📧 Gmail</div>
-  <div class="tab" onclick="switchTab('itinerary')">🗺️ Itinerary</div>
-  <div class="tab" onclick="switchTab('chat')">💬 Chat</div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     CAPTURE TAB — blank notebook, zero friction
-     ═══════════════════════════════════════════════════════ -->
-<div class="panel active" id="tab-capture">
-
-  <!-- Trip shelf -->
-  <div class="shelf" id="trip-shelf">
-    <div class="shelf-chip new-chip" onclick="quickNewTrip()">+ New Trip</div>
-  </div>
-
-  <!-- Empty state (no trip selected) -->
-  <div class="empty-notebook" id="empty-state">
-    <div class="icon">📓</div>
-    <h2>Start a new trip</h2>
-    <p>Tap <strong>+ New Trip</strong> above and start dumping anything you know — notes, links, ideas, addresses.</p>
-  </div>
-
-  <!-- Notebook (shown when a trip is selected) -->
-  <div class="notebook-wrap" id="notebook-wrap" style="display:none">
-    <div class="trip-header">
-      <input class="trip-name-input" id="trip-name-input"
-        placeholder="Trip name"
-        onblur="saveTriName()" onkeydown="if(event.key==='Enter')this.blur()" />
-      <span class="item-count" id="trip-item-count"></span>
-      <button class="tool-btn" style="color:var(--danger);border-color:transparent;padding:4px 8px" onclick="deleteTrip()" title="Delete trip">🗑</button>
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="brand">Apollo ✈️</div>
+    <button class="btn-new-trip" onclick="showNewTrip()">
+      <span style="font-size:1.1rem">+</span> New Trip
+    </button>
+    <div class="section-label">Upcoming Trips</div>
+    <div class="trip-list" id="trip-list"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-link" id="gmail-sidebar-btn" onclick="showGmail()">📧 Gmail</button>
     </div>
+  </aside>
 
-    <div class="notebook-area">
-      <textarea id="capture-text"
-        placeholder="What do you know about this trip? Paste anything — notes, addresses, links, ideas, stream of consciousness…"
-        onpaste="handlePaste(event)"
-        onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))addCapture()"></textarea>
-      <div class="capture-toolbar">
-        <button class="tool-btn" onclick="document.getElementById('file-input').click()">📎 File / PDF</button>
-        <button class="tool-btn" id="voice-btn" onclick="toggleVoice()">🎤 Voice</button>
-        <input type="file" id="file-input" accept="image/*,.pdf,application/pdf" style="display:none" onchange="handleFileCapture(this)" />
-        <button class="add-btn" id="add-btn" onclick="addCapture()">Add →</button>
+  <!-- ── Main Area ── -->
+  <main class="main-area">
+
+    <!-- Empty state -->
+    <div class="view" id="view-empty">
+      <div style="height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center">
+        <div style="font-size:3rem">✈️</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--navy)">Welcome to Apollo</h2>
+        <p style="color:var(--muted);font-size:0.95rem">Create your first trip to get started</p>
+        <button class="btn-primary" onclick="showNewTrip()">+ New Trip</button>
       </div>
     </div>
 
-    <div id="feed-section" style="display:none">
-      <div class="feed-header" id="feed-header"></div>
-      <div class="feed-items" id="feed-items"></div>
-    </div>
-  </div>
-</div>
+    <!-- New Trip form -->
+    <div class="view" id="view-new-trip">
+      <div style="padding:40px 48px;max-width:860px">
+        <h1 class="new-trip-title">Create a New Trip</h1>
+        <p class="new-trip-sub">Add trip details manually, upload information, or start from a template</p>
+        <div class="form-tabs">
+          <button class="form-tab active" onclick="switchFormTab('manual',this)">Manual Entry</button>
+          <button class="form-tab" onclick="switchFormTab('upload',this)">Upload</button>
+          <button class="form-tab" onclick="switchFormTab('templates',this)">Templates</button>
+        </div>
 
-<!-- ═══════════════════════════════════════════════════════
-     GMAIL TAB
-     ═══════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-gmail">
-  <div class="padded">
-    <div class="card" id="gmail-connect-card">
-      <h3>Gmail</h3>
-      <div id="gmail-disconnected">
-        <p style="color:var(--muted);font-size:0.88rem;margin-bottom:14px">Connect Gmail to scan your inbox for travel emails and add them to any trip.</p>
-        <a href="/api/auth/gmail" class="btn btn-primary" style="text-decoration:none;display:inline-block">🔗 Connect Gmail</a>
-      </div>
-      <div id="gmail-connected" style="display:none">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="color:var(--success)">✓</span>
-          <span style="color:var(--success);font-weight:600">Gmail connected</span>
+        <!-- Manual Entry -->
+        <div class="form-panel active" id="form-manual">
+          <div class="form-group">
+            <label>Trip Name *</label>
+            <input type="text" id="new-trip-name" placeholder="e.g., Nashville Weekend" />
+          </div>
+          <div class="form-group">
+            <label>Destination</label>
+            <input type="text" id="new-trip-location" placeholder="e.g., Nashville, TN" />
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Start Date</label>
+              <input type="text" id="new-trip-start" placeholder="e.g., Apr 14" />
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>End Date</label>
+              <input type="text" id="new-trip-end" placeholder="e.g., Apr 19, 2026" />
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:16px">
+            <label>Description</label>
+            <textarea id="new-trip-desc" placeholder="What's this trip about?"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" onclick="createTripManual()">Create Trip</button>
+            <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Upload -->
+        <div class="form-panel" id="form-upload">
+          <div class="upload-zone" id="upload-drop-zone" onclick="document.getElementById('new-trip-file').click()">
+            <div class="upload-icon">⬆️</div>
+            <h3>Upload screenshot, email, or notes</h3>
+            <p>Drag and drop or click to browse</p>
+            <button class="btn-primary" type="button" onclick="event.stopPropagation();document.getElementById('new-trip-file').click()">Choose File</button>
+            <input type="file" id="new-trip-file" style="display:none" onchange="handleNewTripFile(this)" />
+          </div>
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Templates -->
+        <div class="form-panel" id="form-templates">
+          <div class="template-grid" id="template-grid"></div>
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="card" id="gmail-scan-card" style="display:none">
-      <h3>Search Emails</h3>
-      <div style="margin-bottom:10px">
-        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px">Add to trip</label>
-        <select id="gmail-trip-select"><option value="">— Select a trip —</option></select>
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px">Keywords (comma-separated)</label>
-        <input type="text" id="gmail-keywords" placeholder="e.g. hotel, booking, flight, reservation" />
-      </div>
-      <button class="btn btn-primary" onclick="scanGmail()" id="scan-btn">🔍 Search Inbox</button>
-    </div>
-
-    <div class="card" id="gmail-results-card" style="display:none">
-      <h3>Matching Emails <span id="email-count" style="color:var(--muted);font-weight:400"></span></h3>
-      <div id="email-results" style="display:flex;flex-direction:column;gap:10px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     ITINERARY TAB
-     ═══════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-itinerary">
-  <div class="padded">
-    <div class="card">
-      <h3>Select Trip</h3>
-      <div class="row" id="itinerary-trip-list" style="flex-wrap:wrap;gap:8px"></div>
-    </div>
-    <div class="card" id="itinerary-card" style="display:none">
-      <div class="row" style="margin-bottom:14px">
-        <h3 id="itinerary-trip-name" style="flex:1;text-transform:none;color:var(--text)">Itinerary</h3>
-        <button class="btn btn-primary btn-sm" onclick="organizeTrip()" id="organize-btn">✨ Organize with AI</button>
-      </div>
-      <div id="itinerary-output" style="color:var(--muted);font-style:italic">
-        Click "Organize with AI" to generate your itinerary from saved content.
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     CHAT TAB
-     ═══════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-chat">
-  <div class="padded" style="flex:1">
-    <div class="card" style="flex:1;display:flex;flex-direction:column;gap:12px">
-      <div class="row">
-        <div class="flex-1">
-          <label style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;display:block">Trip context</label>
-          <select id="chat-trip-select" onchange="chatTripId=this.value||null">
-            <option value="">— No trip —</option>
-          </select>
+    <!-- Trip Detail -->
+    <div class="view" id="view-trip">
+      <div class="trip-header">
+        <div class="trip-header-left">
+          <h1 class="trip-name" id="trip-name-display"></h1>
+          <div class="trip-meta" id="trip-meta-display"></div>
+          <div class="trip-description" id="trip-desc-display"></div>
+          <div style="height:16px"></div>
         </div>
-        <div>
-          <label style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;display:block">Location</label>
-          <div class="geo-badge off" id="geo-badge" onclick="toggleGeo()">📍 Off</div>
+        <div class="trip-header-actions">
+          <button class="btn-edit" onclick="showEditTrip()">✏️ Edit Trip</button>
+          <button class="btn-delete-trip" onclick="deleteTrip()">🗑 Delete Trip</button>
         </div>
       </div>
-      <div id="chat-messages"></div>
-      <div class="row" style="gap:8px">
-        <input type="text" id="chat-input" class="flex-1" placeholder="Ask anything about your trip…"
-          onkeydown="if(event.key==='Enter')sendMessage()" />
-        <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+      <div class="trip-tabs">
+        <button class="trip-tab active" onclick="switchTripTab('research',this)">Research</button>
+        <button class="trip-tab" onclick="switchTripTab('itinerary',this)">Itinerary</button>
+        <button class="trip-tab" onclick="switchTripTab('chat',this)">Chat</button>
       </div>
+
+      <!-- Research -->
+      <div class="trip-panel active" id="panel-research">
+        <div class="panel-header">
+          <h2>Research</h2>
+          <button class="btn-add-content" onclick="showAddContent()">+ Add Content</button>
+        </div>
+        <div class="content-grid" id="content-grid"></div>
+      </div>
+
+      <!-- Itinerary -->
+      <div class="trip-panel" id="panel-itinerary">
+        <div class="panel-header">
+          <h2>Itinerary</h2>
+        </div>
+        <div id="itinerary-area"></div>
+      </div>
+
+      <!-- Chat -->
+      <div class="trip-panel" id="panel-chat">
+        <div class="chat-wrap">
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Ask anything about your trip…" onkeydown="if(event.key==='Enter')sendChat()" />
+            <button class="btn-primary" onclick="sendChat()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gmail View -->
+    <div class="view" id="view-gmail">
+      <div style="padding:40px 48px;max-width:760px">
+        <h1 style="font-size:1.8rem;font-weight:700;color:var(--navy);margin-bottom:24px">Gmail</h1>
+
+        <div class="gmail-connect-card">
+          <div id="gmail-disconnected">
+            <p style="color:var(--muted);font-size:0.9rem;margin-bottom:16px">Connect Gmail to scan your inbox for travel emails.</p>
+            <a href="/api/auth/gmail" class="btn-primary" style="text-decoration:none;display:inline-block">🔗 Connect Gmail</a>
+          </div>
+          <div id="gmail-connected" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;color:green;font-weight:600">✓ Gmail connected</div>
+          </div>
+        </div>
+
+        <div class="gmail-scan-card" id="gmail-scan-card" style="display:none">
+          <h3>Search Emails</h3>
+          <div class="form-group">
+            <label>Add to trip</label>
+            <select id="gmail-trip-select"><option value="">— Select a trip —</option></select>
+          </div>
+          <div class="form-group">
+            <label>Keywords (comma-separated)</label>
+            <input type="text" id="gmail-keywords" placeholder="e.g. hotel, booking, flight" />
+          </div>
+          <button class="btn-primary" onclick="scanGmail()" id="scan-btn">🔍 Search Inbox</button>
+          <div class="email-results" id="email-results" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Modals ── -->
+
+<!-- Add Content Modal -->
+<div class="modal-overlay" id="modal-add-content">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add Trip Content</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-content')">✕</button>
+    </div>
+    <div class="content-type-tabs">
+      <button class="content-type-tab active" onclick="switchContentType('link',this)">Link</button>
+      <button class="content-type-tab" onclick="switchContentType('text',this)">Text</button>
+      <button class="content-type-tab" onclick="switchContentType('file',this)">File</button>
+    </div>
+
+    <!-- Link -->
+    <div id="add-link-panel">
+      <div class="form-group">
+        <label>URL *</label>
+        <input type="url" id="add-link-url" placeholder="https://..." />
+      </div>
+      <div class="form-group">
+        <label>Label (optional)</label>
+        <input type="text" id="add-link-label" placeholder="e.g., Best restaurants in Nashville" />
+      </div>
+    </div>
+
+    <!-- Text -->
+    <div id="add-text-panel" style="display:none">
+      <div class="form-group">
+        <label>Label (optional)</label>
+        <input type="text" id="add-text-label" placeholder="e.g., Hotel confirmation" />
+      </div>
+      <div class="form-group">
+        <label>Content *</label>
+        <textarea id="add-text-content" style="min-height:120px" placeholder="Paste notes, emails, or any text…"></textarea>
+      </div>
+    </div>
+
+    <!-- File -->
+    <div id="add-file-panel" style="display:none">
+      <div class="upload-zone" style="padding:40px 24px" onclick="document.getElementById('add-file-input').click()">
+        <div style="font-size:2rem;margin-bottom:8px">📎</div>
+        <p style="margin-bottom:12px;font-size:0.88rem;color:var(--muted)">Upload a screenshot, PDF, or image</p>
+        <button class="btn-primary" type="button" onclick="event.stopPropagation();document.getElementById('add-file-input').click()">Choose File</button>
+        <input type="file" id="add-file-input" style="display:none" accept="image/*,.pdf" onchange="updateFileLabel(this)" />
+      </div>
+      <div id="file-chosen-label" style="font-size:0.85rem;color:var(--muted);margin-top:8px;text-align:center"></div>
+    </div>
+
+    <div class="form-actions" style="margin-top:24px">
+      <button class="btn-primary" onclick="submitAddContent()">Add Content</button>
+      <button class="btn-secondary" onclick="closeModal('modal-add-content')">Cancel</button>
     </div>
   </div>
 </div>
 
+<!-- Edit Trip Modal -->
+<div class="modal-overlay" id="modal-edit-trip">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit Trip</h2>
+      <button class="modal-close" onclick="closeModal('modal-edit-trip')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Trip Name *</label>
+      <input type="text" id="edit-trip-name" />
+    </div>
+    <div class="form-group">
+      <label>Destination</label>
+      <input type="text" id="edit-trip-location" placeholder="e.g., Nashville, TN" />
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0">
+        <label>Start Date</label>
+        <input type="text" id="edit-trip-start" placeholder="e.g., Apr 14" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>End Date</label>
+        <input type="text" id="edit-trip-end" placeholder="e.g., Apr 19, 2026" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label>Description</label>
+      <textarea id="edit-trip-desc"></textarea>
+    </div>
+    <div class="form-actions" style="margin-top:8px">
+      <button class="btn-primary" onclick="submitEditTrip()">Save Changes</button>
+      <button class="btn-secondary" onclick="closeModal('modal-edit-trip')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Item Detail Modal -->
+<div class="modal-overlay" id="modal-item-detail">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div id="detail-type-badge" class="card-type"></div>
+      <button class="modal-close" onclick="closeModal('modal-item-detail')">✕</button>
+    </div>
+    <h2 id="detail-title" style="font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:16px"></h2>
+    <img id="detail-thumb" src="" alt="" style="display:none;width:100%;border-radius:10px;margin-bottom:16px">
+    <div id="detail-fields" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div id="detail-date" style="font-size:0.8rem;color:var(--muted);margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"></div>
+  </div>
+</div>
+
+<!-- Toast -->
 <div id="toast"></div>
 
 <script>
@@ -393,506 +548,517 @@
 // ─────────────────────────────────────────────────
 let trips = [];
 let activeTripId = null;
-let itineraryTripId = null;
-let chatTripId = null;
-let geoEnabled = false;
-let geoCoords = null;
+let activeTripTab = 'research';
 let chatHistory = [];
-let recognition = null;
 let pollTimer = null;
 
+const TEMPLATES = [
+  { icon: '🏙️', name: 'City Break', desc: 'Short urban getaway', location: '', start: '', end: '', desc_text: 'Urban exploration trip' },
+  { icon: '🏖️', name: 'Beach Holiday', desc: 'Sun, sea and relaxation', location: '', start: '', end: '', desc_text: 'Beach vacation' },
+  { icon: '🚗', name: 'Road Trip', desc: 'Open road adventure', location: '', start: '', end: '', desc_text: 'Road trip adventure' },
+  { icon: '🎒', name: 'Backpacking', desc: 'Budget travel adventure', location: '', start: '', end: '', desc_text: 'Backpacking trip' },
+  { icon: '💍', name: 'Honeymoon', desc: 'Romantic getaway', location: '', start: '', end: '', desc_text: 'Honeymoon trip' },
+  { icon: '👨‍👩‍👧', name: 'Family Trip', desc: 'Fun for everyone', location: '', start: '', end: '', desc_text: 'Family vacation' },
+];
+
 // ─────────────────────────────────────────────────
-// Boot
+// Utilities
+// ─────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ─────────────────────────────────────────────────
+// Init
 // ─────────────────────────────────────────────────
 async function init() {
+  renderTemplates();
   await loadTrips();
-  if (new URLSearchParams(location.search).get('gmail') === 'connected') {
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('gmail') === 'connected') {
     toast('Gmail connected!');
     history.replaceState({}, '', '/');
-    switchTab('gmail');
+    showGmail();
   }
-  const sharedUrl = new URLSearchParams(location.search).get('share');
+  const sharedUrl = params.get('share');
   if (sharedUrl) {
     history.replaceState({}, '', '/');
-    document.getElementById('capture-text').value = sharedUrl;
-    switchTab('capture');
-    toast('URL ready to save — select a trip and tap Add');
+    if (activeTripId) {
+      document.getElementById('add-link-url').value = sharedUrl;
+      switchContentType('link', document.querySelector('.content-type-tab'));
+      openModal('modal-add-content');
+    } else {
+      toast('Create a trip first, then paste the URL');
+    }
   }
 }
 
+// ─────────────────────────────────────────────────
+// Trips
+// ─────────────────────────────────────────────────
 async function loadTrips() {
-  const res = await fetch('/api/trips');
-  trips = (await res.json()).trips;
-  renderShelf();
-  renderItineraryTrips();
-  renderChatTripSelect();
+  const data = await fetch('/api/trips').then(r => r.json()).catch(() => ({ trips: [] }));
+  trips = data.trips || [];
+  renderSidebar();
   renderGmailTripSelect();
   if (activeTripId && !trips.find(t => t.id === activeTripId)) activeTripId = null;
-  if (activeTripId) renderFeed();
+  if (activeTripId) renderTripDetail();
+  else if (!trips.length) showView('empty');
+}
+
+function renderSidebar() {
+  const list = document.getElementById('trip-list');
+  if (!trips.length) { list.innerHTML = ''; return; }
+  list.innerHTML = trips.map(t => {
+    const active = t.id === activeTripId;
+    const dateStr = t.start_date || '';
+    return `<div class="trip-item${active ? ' active' : ''}" onclick="selectTrip('${t.id}')">
+      <span class="trip-pin">📍</span>
+      <div>
+        <div class="trip-item-name">${escHtml(t.name)}</div>
+        ${dateStr ? `<div class="trip-item-date">${escHtml(dateStr)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectTrip(id) {
+  activeTripId = id;
+  activeTripTab = 'research';
+  chatHistory = [];
+  renderSidebar();
+  renderTripDetail();
+  showView('trip');
+  // reset tabs
+  document.querySelectorAll('.trip-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.querySelectorAll('.trip-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+}
+
+function renderTripDetail() {
+  const trip = trips.find(t => t.id === activeTripId);
+  if (!trip) return;
+
+  document.getElementById('trip-name-display').textContent = trip.name;
+
+  // Meta row
+  const metaParts = [];
+  if (trip.location) metaParts.push(`<span class="trip-meta-item">📍 ${escHtml(trip.location)}</span>`);
+  const dates = [trip.start_date, trip.end_date].filter(Boolean).join(' – ');
+  if (dates) metaParts.push(`<span class="trip-meta-item">📅 ${escHtml(dates)}</span>`);
+  document.getElementById('trip-meta-display').innerHTML = metaParts.join('');
+  document.getElementById('trip-desc-display').textContent = trip.description || '';
+
+  renderContentGrid();
+  renderItineraryPanel();
+}
+
+// ─────────────────────────────────────────────────
+// View management
+// ─────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  // Update Gmail sidebar highlight
+  document.getElementById('gmail-sidebar-btn').classList.toggle('active', name === 'gmail');
+}
+
+function showNewTrip() {
+  showView('new-trip');
+  switchFormTab('manual', document.querySelector('.form-tab'));
+}
+
+function showGmail() {
+  checkGmailStatus();
+  showView('gmail');
+}
+
+// ─────────────────────────────────────────────────
+// New Trip
+// ─────────────────────────────────────────────────
+function switchFormTab(name, btn) {
+  document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`form-${name}`).classList.add('active');
+}
+
+function renderTemplates() {
+  document.getElementById('template-grid').innerHTML = TEMPLATES.map((t, i) => `
+    <div class="template-card" onclick="useTemplate(${i})">
+      <div class="t-icon">${t.icon}</div>
+      <h4>${t.name}</h4>
+      <p>${t.desc}</p>
+    </div>`).join('');
+}
+
+function useTemplate(i) {
+  const t = TEMPLATES[i];
+  document.getElementById('new-trip-name').value = t.name;
+  document.getElementById('new-trip-desc').value = t.desc_text;
+  switchFormTab('manual', document.querySelector('.form-tab'));
+  document.querySelector('.form-tab').classList.add('active');
+}
+
+async function createTripManual() {
+  const name = document.getElementById('new-trip-name').value.trim();
+  if (!name) { toast('Trip name is required'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('location', document.getElementById('new-trip-location').value);
+  fd.append('start_date', document.getElementById('new-trip-start').value);
+  fd.append('end_date', document.getElementById('new-trip-end').value);
+  fd.append('description', document.getElementById('new-trip-desc').value);
+  const trip = await fetch('/api/trips', { method: 'POST', body: fd }).then(r => r.json());
+  // Clear form
+  ['new-trip-name','new-trip-location','new-trip-start','new-trip-end','new-trip-desc'].forEach(id => document.getElementById(id).value = '');
+  await loadTrips();
+  selectTrip(trip.id);
+  toast('Trip created!');
+}
+
+async function handleNewTripFile(input) {
+  if (!input.files[0]) return;
+  // Create a default trip then upload the file to it
+  const fd = new FormData();
+  fd.append('name', input.files[0].name.replace(/\.[^.]+$/, ''));
+  const trip = await fetch('/api/trips', { method: 'POST', body: fd }).then(r => r.json());
+  await loadTrips();
+  selectTrip(trip.id);
+  // Now upload the file
+  const ufd = new FormData();
+  ufd.append('content_type', input.files[0].type === 'application/pdf' ? 'file' : 'file');
+  ufd.append('file', input.files[0]);
+  await fetch(`/api/trips/${trip.id}/upload`, { method: 'POST', body: ufd });
+  await loadTrips();
+  renderContentGrid();
+  toast('Trip created with file!');
+}
+
+// ─────────────────────────────────────────────────
+// Edit / Delete Trip
+// ─────────────────────────────────────────────────
+function showEditTrip() {
+  const trip = trips.find(t => t.id === activeTripId);
+  if (!trip) return;
+  document.getElementById('edit-trip-name').value = trip.name || '';
+  document.getElementById('edit-trip-location').value = trip.location || '';
+  document.getElementById('edit-trip-start').value = trip.start_date || '';
+  document.getElementById('edit-trip-end').value = trip.end_date || '';
+  document.getElementById('edit-trip-desc').value = trip.description || '';
+  openModal('modal-edit-trip');
+}
+
+async function submitEditTrip() {
+  const name = document.getElementById('edit-trip-name').value.trim();
+  if (!name) { toast('Trip name required'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('location', document.getElementById('edit-trip-location').value);
+  fd.append('start_date', document.getElementById('edit-trip-start').value);
+  fd.append('end_date', document.getElementById('edit-trip-end').value);
+  fd.append('description', document.getElementById('edit-trip-desc').value);
+  await fetch(`/api/trips/${activeTripId}`, { method: 'PATCH', body: fd });
+  closeModal('modal-edit-trip');
+  await loadTrips();
+  renderTripDetail();
+  toast('Trip updated!');
+}
+
+async function deleteTrip() {
+  const trip = trips.find(t => t.id === activeTripId);
+  if (!confirm(`Delete "${trip?.name}"? This cannot be undone.`)) return;
+  await fetch(`/api/trips/${activeTripId}`, { method: 'DELETE' });
+  activeTripId = null;
+  await loadTrips();
+  showView(trips.length ? 'empty' : 'empty');
+  toast('Trip deleted');
 }
 
 // ─────────────────────────────────────────────────
 // Tabs
 // ─────────────────────────────────────────────────
-function switchTab(name) {
-  const names = ['capture','gmail','itinerary','chat'];
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'gmail') checkGmailStatus();
+function switchTripTab(name, btn) {
+  activeTripTab = name;
+  document.querySelectorAll('.trip-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.trip-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+  if (name === 'chat') renderChatPanel();
+  if (name === 'itinerary') renderItineraryPanel();
+}
+
+function switchFormTab(name, btn) {
+  document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`form-${name}`).classList.add('active');
 }
 
 // ─────────────────────────────────────────────────
-// Trip shelf
+// Add Content
 // ─────────────────────────────────────────────────
-function renderShelf() {
-  const shelf = document.getElementById('trip-shelf');
-  shelf.innerHTML = '<div class="shelf-chip new-chip" onclick="quickNewTrip()">+ New Trip</div>';
-  trips.forEach(t => {
-    const chip = document.createElement('div');
-    chip.className = 'shelf-chip' + (t.id === activeTripId ? ' active' : '');
-    chip.textContent = `${t.name} (${t.items.length})`;
-    chip.onclick = () => selectTrip(t.id);
-    shelf.appendChild(chip);
-  });
+let currentContentType = 'link';
+
+function showAddContent() {
+  currentContentType = 'link';
+  document.getElementById('add-link-url').value = '';
+  document.getElementById('add-link-label').value = '';
+  document.getElementById('add-text-label').value = '';
+  document.getElementById('add-text-content').value = '';
+  document.getElementById('file-chosen-label').textContent = '';
+  document.querySelectorAll('.content-type-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.getElementById('add-link-panel').style.display = 'block';
+  document.getElementById('add-text-panel').style.display = 'none';
+  document.getElementById('add-file-panel').style.display = 'none';
+  openModal('modal-add-content');
 }
 
-async function quickNewTrip() {
-  const fd = new FormData(); // no name — auto-generated
-  const res = await fetch('/api/trips', { method: 'POST', body: fd });
-  const trip = await res.json();
-  trips.unshift(trip);
-  selectTrip(trip.id);
-  renderShelf();
-  renderItineraryTrips();
-  renderChatTripSelect();
-  renderGmailTripSelect();
-  // Focus the notebook textarea
-  setTimeout(() => document.getElementById('capture-text').focus(), 50);
+function switchContentType(type, btn) {
+  currentContentType = type;
+  document.querySelectorAll('.content-type-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('add-link-panel').style.display = type === 'link' ? 'block' : 'none';
+  document.getElementById('add-text-panel').style.display = type === 'text' ? 'block' : 'none';
+  document.getElementById('add-file-panel').style.display = type === 'file' ? 'block' : 'none';
 }
 
-function selectTrip(id) {
-  activeTripId = id;
-  renderShelf();
-  const trip = trips.find(t => t.id === id);
+function updateFileLabel(input) {
+  const label = input.files[0] ? input.files[0].name : '';
+  document.getElementById('file-chosen-label').textContent = label;
+}
+
+async function submitAddContent() {
+  if (!activeTripId) return;
+  const fd = new FormData();
+
+  if (currentContentType === 'link') {
+    let url = document.getElementById('add-link-url').value.trim();
+    if (!url) { toast('URL is required'); return; }
+    // Normalise bare URLs
+    if (!/^https?:\/\//i.test(url) && /\S+\.[a-z]{2,}\/\S+/i.test(url)) url = 'https://' + url;
+    fd.append('content_type', 'link');
+    fd.append('url', url);
+    fd.append('label', document.getElementById('add-link-label').value.trim());
+  } else if (currentContentType === 'text') {
+    const content = document.getElementById('add-text-content').value.trim();
+    if (!content) { toast('Content is required'); return; }
+    fd.append('content_type', 'text');
+    fd.append('text', content);
+    fd.append('label', document.getElementById('add-text-label').value.trim());
+  } else if (currentContentType === 'file') {
+    const file = document.getElementById('add-file-input').files[0];
+    if (!file) { toast('Please choose a file'); return; }
+    fd.append('content_type', 'file');
+    fd.append('file', file);
+  }
+
+  const res = await fetch(`/api/trips/${activeTripId}/upload`, { method: 'POST', body: fd });
+  if (!res.ok) { toast('Failed to add content'); return; }
+  closeModal('modal-add-content');
+  await loadTrips();
+  renderContentGrid();
+  toast('Added!');
+  startPolling();
+}
+
+// ─────────────────────────────────────────────────
+// Content Grid
+// ─────────────────────────────────────────────────
+const TYPE_ICONS = { hotel:'🏨', restaurant:'🍽️', flight:'✈️', attraction:'🎯', transport:'🚌', other:'🔗', text:'📝', email:'📧', file:'📎', link:'🔗' };
+
+function renderContentGrid() {
+  const trip = trips.find(t => t.id === activeTripId);
   if (!trip) return;
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('notebook-wrap').style.display = 'flex';
-  document.getElementById('trip-name-input').value = trip.name;
-  renderFeed();
-}
-
-async function saveTriName() {
-  if (!activeTripId) return;
-  const name = document.getElementById('trip-name-input').value.trim();
-  if (!name) return;
-  const trip = trips.find(t => t.id === activeTripId);
-  if (!trip || trip.name === name) return;
-  trip.name = name;
-  const fd = new FormData();
-  fd.append('name', name);
-  await fetch(`/api/trips/${activeTripId}/rename`, { method: 'PATCH', body: fd });
-  renderShelf();
-}
-
-async function deleteTrip() {
-  if (!activeTripId) return;
-  const trip = trips.find(t => t.id === activeTripId);
-  if (!confirm(`Delete "${trip?.name}"? This cannot be undone.`)) return;
-  await fetch(`/api/trips/${activeTripId}`, { method: 'DELETE' });
-  activeTripId = null;
-  document.getElementById('notebook-wrap').style.display = 'none';
-  document.getElementById('empty-state').style.display = 'flex';
-  await loadTrips();
-  toast('Trip deleted');
-}
-
-// ─────────────────────────────────────────────────
-// Capture
-// ─────────────────────────────────────────────────
-async function addCapture() {
-  if (!activeTripId) return toast('Select or create a trip first');
-  const textarea = document.getElementById('capture-text');
-  const raw = textarea.value.trim();
-  if (!raw) return;
-
-  const btn = document.getElementById('add-btn');
-  btn.disabled = true;
-
-  // Auto-detect URL — also handle bare domain/path URLs (no https://)
-  const URL_FULL = /^https?:\/\/\S+$/;
-  const URL_BARE = /^(?:www\.)?\S+\.[a-z]{2,}\/\S+$/i;
-  let linkUrl = raw;
-  if (!URL_FULL.test(raw) && URL_BARE.test(raw)) linkUrl = 'https://' + raw;
-  const isUrl = URL_FULL.test(linkUrl);
-
-  const fd = new FormData();
-  fd.append('content_type', isUrl ? 'link' : 'text');
-  if (isUrl) fd.append('url', linkUrl);
-  else fd.append('text', raw);
-
-  const res = await fetch(`/api/trips/${activeTripId}/upload`, { method: 'POST', body: fd });
-  btn.disabled = false;
-
-  if (!res.ok) {
-    toast('Could not save — try again');
+  const grid = document.getElementById('content-grid');
+  if (!trip.items.length) {
+    grid.innerHTML = `<div class="empty-cards" style="grid-column:1/-1">
+      <p>No content yet. Add links, notes, or files to start building your research.</p>
+      <button class="btn-primary" onclick="showAddContent()">+ Add Content</button>
+    </div>`;
     return;
   }
-  textarea.value = '';
-  if (isUrl) toast('Link saved — extracting details…');
-  await loadTrips();
-  renderFeed();
+  grid.innerHTML = [...trip.items].reverse().map(item => renderCard(item)).join('');
 }
 
-function handlePaste(e) {
-  // Detect URL in clipboard and show hint
-  const text = e.clipboardData?.getData('text') || '';
-  if (/^https?:\/\/\S+$/.test(text.trim())) {
-    document.getElementById('capture-text').placeholder = '🔗 URL detected — tap Add to fetch page details';
-    setTimeout(() => {
-      document.getElementById('capture-text').placeholder =
-        'What do you know about this trip? Paste anything — notes, addresses, links, ideas, stream of consciousness…';
-    }, 3000);
-  }
-}
-
-async function handleFileCapture(input) {
-  if (!activeTripId) { toast('Select or create a trip first'); return; }
-  const file = input.files[0];
-  if (!file) return;
-  toast('Uploading…');
-  const fd = new FormData();
-  fd.append('content_type', 'file');
-  fd.append('file', file);
-  const res = await fetch(`/api/trips/${activeTripId}/upload`, { method: 'POST', body: fd });
-  input.value = '';
-  if (!res.ok) { toast('Upload failed'); return; }
-  await loadTrips();
-  renderFeed();
-  toast('File saved!');
-}
-
-// ─────────────────────────────────────────────────
-// Voice
-// ─────────────────────────────────────────────────
-function toggleVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Voice not supported — use Chrome or Safari'); return; }
-  const btn = document.getElementById('voice-btn');
-
-  if (recognition) {
-    recognition.stop();
-    return;
-  }
-
-  recognition = new SR();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
-  btn.textContent = '⏹ Stop';
-  btn.classList.add('recording');
-
-  recognition.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('capture-text').value = transcript;
-  };
-
-  recognition.onend = () => {
-    recognition = null;
-    btn.textContent = '🎤 Voice';
-    btn.classList.remove('recording');
-  };
-
-  recognition.onerror = () => {
-    recognition = null;
-    btn.textContent = '🎤 Voice';
-    btn.classList.remove('recording');
-    toast('Voice error — try again');
-  };
-
-  recognition.start();
-}
-
-// ─────────────────────────────────────────────────
-// Feed
-// ─────────────────────────────────────────────────
-const CAT_ICONS = { hotel:'🏨', restaurant:'🍽️', flight:'✈️', attraction:'🎯', transport:'🚌', other:'🔗' };
-
-function shortUrl(url) {
-  try { return new URL(url).hostname.replace(/^www\./,'') + new URL(url).pathname.replace(/\/$/,'').slice(0,40); }
-  catch { return url.slice(0,55); }
-}
-
-function renderLinkItem(item) {
+function renderCard(item) {
   const ext = item.extraction || {};
-  const status = ext.status || 'pending';
-  const icon = CAT_ICONS[ext.category] || '🔗';
-  const urlShort = escHtml(shortUrl(item.url || ''));
-
-  if (status === 'pending') {
-    return `<div class="feed-item">
-      <div class="feed-icon">🔗</div>
-      <div class="feed-content">
-        <div class="feed-url">${urlShort}</div>
-        <div class="link-pending"><span class="spinner">⟳</span> Extracting details…</div>
-      </div>
-    </div>`;
-  }
-
-  if (status === 'inaccessible' || status === 'failed') {
-    const msg = status === 'inaccessible'
-      ? 'Behind login or paywall — paste content manually'
-      : 'Could not extract details — raw URL saved';
-    return `<div class="feed-item">
-      <div class="feed-icon">🔗</div>
-      <div class="feed-content">
-        <div class="link-title">${escHtml(ext.title || urlShort)}</div>
-        <div class="feed-url">${urlShort}</div>
-        <div class="link-warn">⚠️ ${msg}</div>
-      </div>
-    </div>`;
-  }
-
-  // extracted or low_confidence
-  const detailFields = [
-    ['address','📍'],['city','📍'],['country','🌍'],['price','💰'],
-    ['check_in','🛎️ Check-in'],['check_out','🛎️ Check-out'],['hours','🕐'],
-    ['phone','📞'],['cuisine','🍴'],['airline','✈️'],['flight_number','🔢'],
-    ['departure','🛫'],['arrival','🛬'],['rating','⭐'],['notes','📝'],
-  ];
-  const details = detailFields.filter(([k]) => ext[k])
-    .map(([k, lbl]) => `<div class="detail-line">${lbl} ${escHtml(ext[k])}</div>`).join('');
-  const expandHtml = details ? `
-    <span class="link-expand" onclick="toggleLinkDetails(this)">Details ▼</span>
-    <div class="link-expanded">${details}</div>` : '';
-  const warnHtml = status === 'low_confidence'
-    ? '<div class="link-warn">⚠️ Limited info — paste page text for more</div>' : '';
-
+  const status = ext.status || '';
   const isTikTok = /tiktok\.com/i.test(item.url || '');
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? `🔗 LINK` : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : `📎 FILE`;
+  const title = ext.title || item.label || item.filename || (item.url ? new URL(item.url).hostname.replace('www.','') : 'Untitled');
+  const preview = ext.summary || (item.content ? item.content.replace(/\n/g,' ').slice(0,100) : '');
+  const pending = status === 'pending' || (!status && item.type === 'link');
   const thumbHtml = isTikTok && ext.thumbnail_url
-    ? `<div style="margin:8px 0 4px"><img src="${escHtml(ext.thumbnail_url)}" alt="TikTok thumbnail"
-         style="width:100%;max-width:280px;border-radius:10px;display:block"></div>` : '';
-  const tikTokBadge = isTikTok ? `<span style="font-size:0.72rem;background:#010101;color:#fff;
-    padding:2px 7px;border-radius:20px;margin-left:6px;vertical-align:middle">TikTok</span>` : '';
+    ? `<img src="${escHtml(ext.thumbnail_url)}" class="card-thumb" alt="thumbnail">` : '';
 
-  return `<div class="feed-item">
-    <div class="feed-icon">${isTikTok ? '🎵' : icon}</div>
-    <div class="feed-content">
-      <div class="link-title">${escHtml(ext.title || urlShort)}${tikTokBadge}</div>
-      ${ext.summary ? `<div class="link-summary">${escHtml(ext.summary)}</div>` : ''}
-      ${thumbHtml}
-      ${warnHtml}${expandHtml}
-    </div>
+  return `<div class="content-card" onclick="showItemDetail(${escHtml(JSON.stringify(JSON.stringify(item)))})">
+    <div class="card-type">${typeLabel}</div>
+    <div class="card-title">${escHtml(title)}</div>
+    ${preview ? `<div class="card-preview">${escHtml(preview)}</div>` : ''}
+    ${pending ? `<div class="card-pending"><span class="spinner">⟳</span> Extracting details…</div>` : ''}
+    ${thumbHtml}
   </div>`;
 }
 
-function toggleLinkDetails(el) {
-  const panel = el.nextElementSibling;
-  const open = panel.classList.toggle('open');
-  el.textContent = open ? 'Details ▲' : 'Details ▼';
-}
+function showItemDetail(itemJson) {
+  const item = JSON.parse(itemJson);
+  const ext = item.extraction || {};
+  const isTikTok = /tiktok\.com/i.test(item.url || '');
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? '🔗 LINK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : '📎 FILE';
+  const title = ext.title || item.label || item.filename || 'Untitled';
 
-function renderFeed() {
-  const trip = trips.find(t => t.id === activeTripId);
-  if (!trip) return;
+  document.getElementById('detail-type-badge').textContent = typeLabel;
+  document.getElementById('detail-title').textContent = title;
 
-  document.getElementById('trip-item-count').textContent =
-    trip.items.length ? `${trip.items.length} item${trip.items.length !== 1 ? 's' : ''}` : '';
+  // Thumbnail
+  const thumb = document.getElementById('detail-thumb');
+  if (isTikTok && ext.thumbnail_url) { thumb.src = ext.thumbnail_url; thumb.style.display = 'block'; }
+  else { thumb.style.display = 'none'; }
 
-  const feedSection = document.getElementById('feed-section');
-  const feedItems = document.getElementById('feed-items');
-  const feedHeader = document.getElementById('feed-header');
+  // Fields
+  const fields = [];
+  if (item.url) fields.push(['URL', `<a href="${escHtml(item.url)}" target="_blank" style="color:var(--accent)">${escHtml(item.url)}</a>`]);
+  if (ext.summary) fields.push(['Summary', escHtml(ext.summary)]);
+  if (item.content && !ext.summary) fields.push(['Content', escHtml(item.content.slice(0, 500) + (item.content.length > 500 ? '…' : ''))]);
+  const detailKeys = [['address','Address'],['city','City'],['country','Country'],['price','Price'],
+    ['check_in','Check-in'],['check_out','Check-out'],['hours','Hours'],['phone','Phone'],
+    ['cuisine','Cuisine'],['airline','Airline'],['flight_number','Flight'],
+    ['departure','Departure'],['arrival','Arrival'],['rating','Rating'],['notes','Notes']];
+  detailKeys.forEach(([k, lbl]) => { if (ext[k]) fields.push([lbl, escHtml(ext[k])]); });
 
-  if (!trip.items.length) { feedSection.style.display = 'none'; return; }
+  document.getElementById('detail-fields').innerHTML = fields.map(([lbl, val]) =>
+    `<div><div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">${lbl}</div>
+     <div style="font-size:0.9rem;color:var(--text)">${val}</div></div>`
+  ).join('');
 
-  feedSection.style.display = 'block';
-  feedHeader.textContent = `Saved (${trip.items.length})`;
+  // Date
+  const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
+  document.getElementById('detail-date').textContent = added ? `Added ${added}` : '';
 
-  feedItems.innerHTML = [...trip.items].reverse().map(item => {
-    if (item.type === 'link') return renderLinkItem(item);
-
-    const icons = { text: '📝', email: '📧', file: '📎' };
-    const icon = icons[item.type] || '📄';
-    const isPdf = item.file_kind === 'document';
-    const isImage = item.file_kind === 'image' || item.type === 'image';
-    let label = item.label || item.type;
-    let preview = '';
-
-    if (isPdf) {
-      label = item.filename || 'PDF';
-      preview = `<div class="feed-preview" style="color:var(--warn)">📄 ${escHtml(item.filename || 'Document')}</div>`;
-    } else if (isImage) {
-      label = item.filename || 'Image';
-      preview = `<div class="feed-preview" style="color:var(--accent2)">🖼️ ${escHtml(item.filename || 'Screenshot')}</div>`;
-    } else if (item.content) {
-      const snippet = item.content.replace(/\n/g,' ').slice(0, 100);
-      preview = `<div class="feed-preview">${escHtml(snippet)}${item.content.length > 100 ? '…' : ''}</div>`;
-    }
-
-    return `<div class="feed-item">
-      <div class="feed-icon">${icon}</div>
-      <div class="feed-content">
-        <div class="feed-label">${escHtml(label)}</div>
-        ${preview}
-      </div>
-    </div>`;
-  }).join('');
-
-  startPollingIfNeeded();
-}
-
-function startPollingIfNeeded() {
-  const trip = trips.find(t => t.id === activeTripId);
-  const hasPending = trip && trip.items.some(i => i.extraction && i.extraction.status === 'pending');
-  if (hasPending && !pollTimer) {
-    pollTimer = setInterval(async () => {
-      await loadTrips();
-      const t = trips.find(x => x.id === activeTripId);
-      const stillPending = t && t.items.some(i => i.extraction && i.extraction.status === 'pending');
-      if (!stillPending) { clearInterval(pollTimer); pollTimer = null; }
-    }, 2500);
-  }
+  openModal('modal-item-detail');
 }
 
 // ─────────────────────────────────────────────────
 // Itinerary
 // ─────────────────────────────────────────────────
-function renderItineraryTrips() {
-  const el = document.getElementById('itinerary-trip-list');
-  el.innerHTML = trips.map(t => `
-    <div class="shelf-chip ${t.id === itineraryTripId ? 'active' : ''}" onclick="selectItineraryTrip('${t.id}')">
-      ${escHtml(t.name)}
-    </div>`).join('');
-}
-
-function selectItineraryTrip(id) {
-  itineraryTripId = id;
-  renderItineraryTrips();
-  const trip = trips.find(t => t.id === id);
-  document.getElementById('itinerary-card').style.display = 'block';
-  document.getElementById('itinerary-trip-name').textContent = trip.name;
-  if (trip.itinerary) renderItinerary(trip.itinerary);
-  else document.getElementById('itinerary-output').innerHTML =
-    '<span style="color:var(--muted);font-style:italic">Click "Organize with AI" to generate your itinerary.</span>';
+function renderItineraryPanel() {
+  const trip = trips.find(t => t.id === activeTripId);
+  if (!trip) return;
+  const area = document.getElementById('itinerary-area');
+  if (trip.itinerary) {
+    area.innerHTML = `
+      <div style="display:flex;gap:10px;margin-bottom:24px">
+        <button class="btn-primary" onclick="organizeTrip()">🔄 Regenerate</button>
+      </div>
+      <div class="itinerary-content">${escHtml(trip.itinerary)}</div>`;
+  } else {
+    area.innerHTML = `<div class="itinerary-placeholder">
+      <p>No itinerary yet. Generate one from your saved research.</p>
+      <button class="btn-primary" onclick="organizeTrip()" ${!trip.items.length ? 'disabled' : ''}>
+        ✨ Generate Itinerary
+      </button>
+      ${!trip.items.length ? '<p style="margin-top:12px;font-size:0.82rem">Add some content first</p>' : ''}
+    </div>`;
+  }
 }
 
 async function organizeTrip() {
-  if (!itineraryTripId) return toast('Select a trip first');
-  const btn = document.getElementById('organize-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner">⟳</span> Organizing…';
-  document.getElementById('itinerary-output').innerHTML =
-    '<span style="color:var(--muted)">Claude is reading your content and building your itinerary…</span>';
-  const res = await fetch(`/api/trips/${itineraryTripId}/organize`, { method: 'POST' });
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⟳ Generating…';
+  const res = await fetch(`/api/trips/${activeTripId}/organize`, { method: 'POST' });
+  if (res.ok) {
+    const data = await res.json();
+    await loadTrips();
+    renderItineraryPanel();
+    toast('Itinerary ready!');
+  } else {
+    toast('Failed to generate itinerary');
+  }
   btn.disabled = false;
-  btn.innerHTML = '✨ Organize with AI';
-  if (!res.ok) { toast((await res.json()).detail || 'Failed'); return; }
-  const data = await res.json();
-  await loadTrips();
-  renderItinerary(data.itinerary);
-}
-
-function renderItinerary(text) {
-  let html = text
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/^### (.+)$/gm,'<h3 style="color:var(--accent);margin:10px 0 4px">$1</h3>')
-    .replace(/^## (.+)$/gm,'<h2 style="color:var(--accent);margin:12px 0 6px">$1</h2>')
-    .replace(/^# (.+)$/gm,'<h1 style="color:var(--accent);margin:14px 0 6px">$1</h1>');
-  document.getElementById('itinerary-output').innerHTML = html;
 }
 
 // ─────────────────────────────────────────────────
 // Chat
 // ─────────────────────────────────────────────────
-function renderChatTripSelect() {
-  const sel = document.getElementById('chat-trip-select');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— No trip —</option>' +
-    trips.map(t => `<option value="${t.id}" ${t.id===cur?'selected':''}>${escHtml(t.name)}</option>`).join('');
+function renderChatPanel() {
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs.children.length && chatHistory.length === 0) {
+    msgs.innerHTML = `<div style="color:var(--muted);font-size:0.88rem;text-align:center;margin-top:20px">
+      Ask me anything about your trip ✈️</div>`;
+  }
 }
 
-async function sendMessage() {
+async function sendChat() {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
+  const msg = input.value.trim();
+  if (!msg) return;
   input.value = '';
-  appendMsg('user', text);
+
+  const msgs = document.getElementById('chat-messages');
+  if (msgs.querySelector('[style*="text-align:center"]')) msgs.innerHTML = '';
+
+  // User bubble
+  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-bubble">${escHtml(msg)}</div></div>`;
+
+  // Assistant bubble
+  const id = 'msg-' + Date.now();
+  msgs.innerHTML += `<div class="chat-msg assistant"><div class="chat-bubble" id="${id}"></div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
   const fd = new FormData();
-  fd.append('message', text);
+  fd.append('message', msg);
+  if (activeTripId) fd.append('trip_id', activeTripId);
   fd.append('history', JSON.stringify(chatHistory));
-  if (chatTripId) fd.append('trip_id', chatTripId);
-  if (geoEnabled && geoCoords) {
-    fd.append('latitude', geoCoords.lat);
-    fd.append('longitude', geoCoords.lng);
-  }
-  const el = appendMsg('assistant', '');
-  let full = '';
+
   const res = await fetch('/api/chat', { method: 'POST', body: fd });
   const reader = res.body.getReader();
-  const dec = new TextDecoder();
+  const decoder = new TextDecoder();
+  let reply = '';
+  const bubble = document.getElementById(id);
+
   while (true) {
-    const { value, done } = await reader.read();
+    const { done, value } = await reader.read();
     if (done) break;
-    for (const line of dec.decode(value).split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      const p = line.slice(6);
-      if (p === '[DONE]') break;
-      try { const c = JSON.parse(p); full += c.text; el.innerHTML = renderMd(full); scrollChat(); } catch {}
+    for (const line of decoder.decode(value).split('\n')) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') break;
+      try { reply += JSON.parse(data).text; bubble.textContent = reply; msgs.scrollTop = msgs.scrollHeight; } catch {}
     }
   }
-  chatHistory.push({ role: 'user', content: text });
-  chatHistory.push({ role: 'assistant', content: full });
-  if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
-}
 
-function appendMsg(role, text) {
-  const el = document.createElement('div');
-  el.className = `msg msg-${role}`;
-  el.innerHTML = renderMd(text) || '&nbsp;';
-  document.getElementById('chat-messages').appendChild(el);
-  scrollChat();
-  return el;
-}
-
-function scrollChat() {
-  const c = document.getElementById('chat-messages');
-  c.scrollTop = c.scrollHeight;
-}
-
-function renderMd(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
-}
-
-// ─────────────────────────────────────────────────
-// Geo
-// ─────────────────────────────────────────────────
-function toggleGeo() {
-  if (!geoEnabled) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      geoCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      geoEnabled = true;
-      const b = document.getElementById('geo-badge');
-      b.className = 'geo-badge';
-      b.textContent = `📍 ${geoCoords.lat.toFixed(3)}, ${geoCoords.lng.toFixed(3)}`;
-      toast('Location enabled');
-    }, () => toast('Location access denied'));
-  } else {
-    geoEnabled = false; geoCoords = null;
-    const b = document.getElementById('geo-badge');
-    b.className = 'geo-badge off'; b.textContent = '📍 Off';
-  }
+  chatHistory.push({ role: 'user', content: msg });
+  chatHistory.push({ role: 'assistant', content: reply });
 }
 
 // ─────────────────────────────────────────────────
 // Gmail
 // ─────────────────────────────────────────────────
 async function checkGmailStatus() {
-  const data = await (await fetch('/api/auth/gmail/status')).json();
-  document.getElementById('gmail-disconnected').style.display = data.connected ? 'none' : 'block';
-  document.getElementById('gmail-connected').style.display = data.connected ? 'block' : 'none';
-  document.getElementById('gmail-scan-card').style.display = data.connected ? 'block' : 'none';
+  try {
+    const service = await fetch('/api/auth/gmail/status').then(r => r.json());
+    document.getElementById('gmail-disconnected').style.display = service.connected ? 'none' : 'block';
+    document.getElementById('gmail-connected').style.display = service.connected ? 'block' : 'none';
+    document.getElementById('gmail-scan-card').style.display = service.connected ? 'block' : 'none';
+  } catch {}
 }
 
 function renderGmailTripSelect() {
@@ -908,37 +1074,30 @@ async function scanGmail() {
   if (!keywords) return toast('Enter keywords');
   const btn = document.getElementById('scan-btn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner">⟳</span> Searching…';
-  document.getElementById('gmail-results-card').style.display = 'none';
+  document.getElementById('email-results').style.display = 'none';
   const fd = new FormData(); fd.append('trip_id', tripId); fd.append('keywords', keywords);
   const res = await fetch('/api/email/scan', { method: 'POST', body: fd });
-  btn.disabled = false; btn.innerHTML = '🔍 Search Inbox';
+  btn.disabled = false; btn.textContent = '🔍 Search Inbox';
   if (!res.ok) {
     let msg = 'Scan failed';
-    try { const err = await res.json(); msg = err.detail || msg; } catch {}
-    toast(msg);
-    return;
+    try { msg = (await res.json()).detail || msg; } catch {}
+    return toast(msg);
   }
   const { emails } = await res.json();
-  document.getElementById('email-count').textContent = `(${emails.length} found)`;
-  document.getElementById('gmail-results-card').style.display = 'block';
-  if (!emails.length) {
-    document.getElementById('email-results').innerHTML =
-      '<p style="color:var(--muted);font-size:0.88rem">No emails matched. Try different keywords.</p>';
-    return;
-  }
-  document.getElementById('email-results').innerHTML = emails.map(e => `
+  const container = document.getElementById('email-results');
+  container.style.display = 'flex';
+  if (!emails.length) { container.innerHTML = '<p style="color:var(--muted);font-size:0.88rem">No emails found. Try different keywords.</p>'; return; }
+  container.innerHTML = emails.map(e => `
     <div class="email-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div>
-          <div class="subject">${escHtml(e.subject)}</div>
-          <div class="meta">${escHtml(e.sender)} · ${escHtml(e.date)}</div>
-        </div>
-        <button class="btn btn-sm btn-primary" style="white-space:nowrap;flex-shrink:0"
-          onclick="addEmailToTrip('${tripId}',${JSON.stringify(e.subject)},${JSON.stringify(e.sender)},${JSON.stringify(e.date)},${JSON.stringify(e.body)},this)">
-          + Add
-        </button>
+      <div style="flex:1">
+        <div class="email-subject">${escHtml(e.subject)}</div>
+        <div class="email-meta">${escHtml(e.sender)} · ${escHtml(e.date)}</div>
+        <div class="email-snippet">${escHtml(e.snippet)}</div>
       </div>
-      <div class="snippet">${escHtml(e.snippet)}</div>
+      <button class="btn-primary" style="white-space:nowrap;flex-shrink:0;font-size:0.82rem;padding:8px 14px"
+        onclick="addEmailToTrip('${tripId}',${JSON.stringify(e.subject)},${JSON.stringify(e.sender)},${JSON.stringify(e.date)},${JSON.stringify(e.body)},this)">
+        + Add
+      </button>
     </div>`).join('');
 }
 
@@ -948,27 +1107,31 @@ async function addEmailToTrip(tripId, subject, sender, date, body, btn) {
   fd.append('trip_id', tripId); fd.append('subject', subject);
   fd.append('sender', sender); fd.append('date', date); fd.append('body', body);
   const res = await fetch('/api/email/add', { method: 'POST', body: fd });
-  if (res.ok) {
-    btn.textContent = '✓ Added'; btn.classList.replace('btn-primary','btn-secondary');
-    await loadTrips(); toast('Email added!');
-  } else { btn.disabled = false; btn.textContent = '+ Add'; toast('Failed'); }
+  if (res.ok) { btn.textContent = '✓ Added'; btn.style.opacity = '.5'; await loadTrips(); toast('Email added!'); }
+  else { btn.disabled = false; btn.textContent = '+ Add'; toast('Failed'); }
 }
 
 // ─────────────────────────────────────────────────
-// Helpers
+// Polling for pending extractions
 // ─────────────────────────────────────────────────
-function escHtml(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const trip = trips.find(t => t.id === activeTripId);
+    const hasPending = trip?.items?.some(i => i.extraction?.status === 'pending');
+    if (!hasPending) { clearInterval(pollTimer); pollTimer = null; return; }
+    await loadTrips();
+    if (activeTripTab === 'research') renderContentGrid();
+  }, 2500);
 }
 
-function toast(msg, ms=2500) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), ms);
+function startPollingIfNeeded() {
+  const trip = trips.find(t => t.id === activeTripId);
+  if (trip?.items?.some(i => i.extraction?.status === 'pending')) startPolling();
 }
 
 // ─────────────────────────────────────────────────
-// Go
+// Boot
 // ─────────────────────────────────────────────────
 init();
 </script>
