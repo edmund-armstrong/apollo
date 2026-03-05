@@ -4,7 +4,12 @@ import uuid
 import base64
 import asyncio
 import re
+import logging
+import urllib.parse
 from datetime import datetime
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [gmaps] %(message)s")
+_log = logging.getLogger("apollo.gmaps")
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Optional
@@ -263,10 +268,46 @@ def _fetch_url_text_sync(url: str) -> str:
     raise last_exc
 
 
+def _fetch_page_data(url: str) -> tuple:
+    """Fetch a URL and return (body_text, og_image_url). og_image_url may be ''."""
+    last_exc: Exception = RuntimeError("No UA succeeded")
+    for ua in _FETCH_UA_LIST:
+        try:
+            headers = {
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            with httpx.Client(follow_redirects=True, timeout=15) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                html = resp.text
+                # Extract og:image from <meta> tag (either attribute order)
+                og_image = ""
+                m = re.search(
+                    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+                    html, re.I,
+                )
+                if not m:
+                    m = re.search(
+                        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                        html, re.I,
+                    )
+                if m:
+                    og_image = m.group(1).strip()
+                parser = _TextExtractor()
+                parser.feed(html)
+                text = parser.get_text()
+                if len(text.strip()) >= 80:
+                    return text, og_image
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc
+
+
 def _url_to_title(url: str) -> str:
     try:
-        from urllib.parse import urlparse
-        p = urlparse(url)
+        p = urllib.parse.urlparse(url)
         return (p.netloc + p.path).replace("www.", "").rstrip("/") or url
     except Exception:
         return url
@@ -287,29 +328,31 @@ def _update_item(user_token: str, trip_id: str, item_id: str, updates: dict):
 _LINK_EXTRACTION_SCHEMA = {
     "type": "object",
     "properties": {
-        "status":        {"type": "string"},
-        "title":         {"type": "string"},
-        "category":      {"type": "string"},
-        "summary":       {"type": "string"},
-        "address":       {"type": "string"},
-        "city":          {"type": "string"},
-        "country":       {"type": "string"},
-        "price":         {"type": "string"},
-        "check_in":      {"type": "string"},
-        "check_out":     {"type": "string"},
-        "hours":         {"type": "string"},
-        "phone":         {"type": "string"},
-        "cuisine":       {"type": "string"},
-        "airline":       {"type": "string"},
-        "flight_number": {"type": "string"},
-        "departure":     {"type": "string"},
-        "arrival":       {"type": "string"},
-        "rating":        {"type": "string"},
-        "notes":         {"type": "string"},
+        "status":           {"type": "string"},
+        "title":            {"type": "string"},
+        "category":         {"type": "string"},
+        "card_description": {"type": "string"},
+        "summary":          {"type": "string"},
+        "details":          {"type": "array", "items": {"type": "string"}},
+        "address":          {"type": "string"},
+        "city":             {"type": "string"},
+        "country":          {"type": "string"},
+        "price":            {"type": "string"},
+        "check_in":         {"type": "string"},
+        "check_out":        {"type": "string"},
+        "hours":            {"type": "string"},
+        "phone":            {"type": "string"},
+        "cuisine":          {"type": "string"},
+        "airline":          {"type": "string"},
+        "flight_number":    {"type": "string"},
+        "departure":        {"type": "string"},
+        "arrival":          {"type": "string"},
+        "rating":           {"type": "string"},
+        "notes":            {"type": "string"},
     },
     # output_config structured outputs require ALL properties in "required"
     "required": [
-        "status", "title", "category", "summary",
+        "status", "title", "category", "card_description", "summary", "details",
         "address", "city", "country", "price",
         "check_in", "check_out", "hours", "phone",
         "cuisine", "airline", "flight_number",
@@ -323,7 +366,12 @@ _LINK_SYSTEM = (
     "Only include fields with clear, explicitly stated values — never guess. "
     "status: 'extracted' = found useful info; 'low_confidence' = very little info; "
     "'inaccessible' = paywall or login required. "
-    "category: one of hotel | restaurant | flight | attraction | transport | other."
+    "category: one of hotel | restaurant | flight | attraction | transport | other. "
+    "card_description: exactly 2 sentences, specific and informative — what is this and why would a traveler care? "
+    "summary: 3–5 sentence paragraph expanding on what makes this worth visiting or reading. "
+    "details: array of 2–4 short strings. Infer content type (restaurant/activity/article/hotel) and extract "
+    "the most useful facts (e.g. neighborhood, price range, hours, must-try dish, key takeaway). "
+    "Use empty string for unknown string fields, empty array for details if no useful facts found."
 )
 
 
@@ -331,71 +379,126 @@ def _is_google_maps_url(url: str) -> bool:
     return bool(re.search(r"(maps\.google\.|google\.[a-z]+/maps|maps\.app\.goo\.gl|goo\.gl/maps)", url))
 
 
-def _fetch_google_maps_place(url: str) -> dict:
-    """
-    Extract place details from a Google Maps URL.
-    Resolves shortened URLs, parses the place name, and optionally enriches
-    with the Places API if GOOGLE_PLACES_API_KEY is set.
-    """
-    # Resolve shortened / redirected URLs (goo.gl, maps.app.goo.gl, etc.)
-    resolved = url
-    if "goo.gl" in url:
-        try:
-            with httpx.Client(follow_redirects=True, timeout=10) as c:
-                r = c.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                resolved = str(r.url)
-        except Exception:
-            pass
+def _gmaps_base_result(title: str) -> dict:
+    """Return a minimal GMaps extraction result (all required fields present)."""
+    return {
+        "status": "extracted",
+        "title": title,
+        "category": "attraction",
+        "card_description": "",
+        "summary": "",
+        "details": [],
+        "address": "",
+        "city": "",
+        "country": "",
+        "price": "",
+        "check_in": "",
+        "check_out": "",
+        "hours": "",
+        "phone": "",
+        "cuisine": "",
+        "airline": "",
+        "flight_number": "",
+        "departure": "",
+        "arrival": "",
+        "rating": "",
+        "notes": "",
+    }
 
-    # Extract place name from URL path  /maps/place/PLACE_NAME/
-    place_query: Optional[str] = None
-    m = re.search(r"/maps/place/([^/@?]+)", resolved)
-    if m:
-        import urllib.parse
-        place_query = urllib.parse.unquote_plus(m.group(1))
-    if not place_query:
-        m = re.search(r"[?&]q=([^&]+)", resolved)
-        if m:
-            import urllib.parse
-            place_query = urllib.parse.unquote_plus(m.group(1))
 
-    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+def _gmaps_type_label(types: list) -> str:
+    """Map Google place types list to a human-readable label."""
+    checks = [
+        (["restaurant", "meal_delivery", "meal_takeaway"], "Restaurant"),
+        (["cafe", "bakery"], "Café"),
+        (["bar", "night_club"], "Bar"),
+        (["lodging", "hotel"], "Hotel"),
+        (["museum"], "Museum"),
+        (["park", "national_park", "natural_feature"], "Park"),
+        (["tourist_attraction", "amusement_park"], "Attraction"),
+        (["shopping_mall", "store", "clothing_store", "department_store"], "Shopping"),
+        (["spa", "beauty_salon"], "Spa"),
+        (["gym", "health"], "Fitness"),
+        (["airport", "transit_station", "train_station", "bus_station"], "Transit"),
+    ]
+    for type_list, label in checks:
+        if any(t in types for t in type_list):
+            return label
+    return "Place"
 
-    # No API key — return minimal extraction from the URL itself
-    if not api_key:
-        title = place_query or "Google Maps place"
-        return {
-            "status": "extracted",
-            "title": title,
-            "category": "attraction",
-            "summary": "",
-        }
 
-    # Call Places API — Find Place
+def _get_place_details(place_id: str, api_key: str) -> Optional[dict]:
+    """Fetch full place details from the Google Places API."""
     try:
-        query = place_query or resolved
         with httpx.Client(timeout=10) as c:
             r = c.get(
-                "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+                "https://maps.googleapis.com/maps/api/place/details/json",
                 params={
-                    "input": query,
-                    "inputtype": "textquery",
-                    "fields": "name,formatted_address,rating,opening_hours,formatted_phone_number,website,types,price_level,editorial_summary",
+                    "place_id": place_id,
+                    "fields": (
+                        "name,formatted_address,address_components,rating,"
+                        "user_ratings_total,opening_hours,formatted_phone_number,"
+                        "website,types,price_level,editorial_summary,photos"
+                    ),
                     "key": api_key,
                 },
             )
         data = r.json()
+        if data.get("status") != "OK":
+            return None
+        return data.get("result")
     except Exception:
-        title = place_query or "Google Maps place"
-        return {"status": "extracted", "title": title, "category": "attraction", "summary": ""}
+        return None
 
-    if data.get("status") != "OK" or not data.get("candidates"):
-        title = place_query or "Google Maps place"
-        return {"status": "extracted", "title": title, "category": "attraction", "summary": ""}
 
-    place = data["candidates"][0]
+def _generate_gmaps_summary(
+    name: str, type_label: str, address: str,
+    rating, review_count, price: Optional[str],
+    hours: Optional[list], editorial: str,
+) -> str:
+    """Call Claude to generate a traveler-friendly summary for a saved place."""
+    try:
+        ant_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not ant_key:
+            return editorial or ""
+        client_ant = anthropic.Anthropic(api_key=ant_key)
+        rating_str = (
+            f"{rating} ({review_count:,} reviews)" if rating and review_count
+            else str(rating) if rating else "Not available"
+        )
+        hours_str = "\n".join(hours) if hours else "Not available"
+        prompt = (
+            f"You are summarizing a place for a traveler who saved it to their trip.\n\n"
+            f"Place name: {name}\nType: {type_label}\nAddress: {address}\n"
+            f"Rating: {rating_str}\nPrice level: {price or 'Not specified'}\n"
+            f"Hours:\n{hours_str}\n"
+            f"Additional context: {editorial or 'None provided'}\n\n"
+            f"Write a 2-4 sentence summary a traveler would find useful. Cover what makes this "
+            f"place worth visiting, what to expect, and any practical context (neighborhood, vibe, "
+            f"price point). Be specific, not generic.\n\nReturn only the summary text. No preamble."
+        )
+        resp = client_ant.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=256,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception:
+        return editorial or ""
 
-    # Map Google types → Apollo category
+
+def _enrich_place_sync(place_id: str, api_key: str, fallback_title: str = "Place") -> dict:
+    """
+    Given a place_id, fetch Place Details + generate Claude summary.
+    Returns a full extraction dict (same shape as _fetch_google_maps_place output).
+    """
+    place = _get_place_details(place_id, api_key)
+    if not place:
+        return _gmaps_base_result(fallback_title)
+
+    _log.info("Place Details → name: %r  address: %r  types: %s",
+              place.get("name"), place.get("formatted_address"), place.get("types", [])[:4])
+
     types = place.get("types", [])
     category = "attraction"
     if any(t in types for t in ["restaurant", "food", "cafe", "bar", "bakery", "meal_takeaway"]):
@@ -404,28 +507,193 @@ def _fetch_google_maps_place(url: str) -> dict:
         category = "hotel"
     elif any(t in types for t in ["airport", "transit_station", "bus_station", "train_station"]):
         category = "transport"
+    type_label = _gmaps_type_label(types)
 
-    hours = None
-    weekday_text = place.get("opening_hours", {}).get("weekday_text")
-    if weekday_text:
-        hours = " | ".join(weekday_text)
+    weekday_text = (place.get("opening_hours") or {}).get("weekday_text") or []
+    hours_text = " | ".join(weekday_text) if weekday_text else ""
 
     price_map = {1: "$", 2: "$$", 3: "$$$", 4: "$$$$"}
-    price = price_map.get(place.get("price_level"))
+    price = price_map.get(place.get("price_level"), "")
 
     rating = place.get("rating")
+    review_count = place.get("user_ratings_total") or 0
+    rating_str = ""
+    if rating and review_count:
+        rating_str = f"{rating} ({review_count:,} reviews)"
+    elif rating:
+        rating_str = str(rating)
 
-    return {
-        "status": "extracted",
-        "title": place.get("name") or place_query or "Google Maps place",
+    neighborhood = ""
+    for comp in (place.get("address_components") or []):
+        comp_types = comp.get("types", [])
+        if any(t in comp_types for t in ["neighborhood", "sublocality", "sublocality_level_1"]):
+            neighborhood = comp["long_name"]
+            break
+    if not neighborhood:
+        for comp in (place.get("address_components") or []):
+            if "locality" in comp.get("types", []):
+                neighborhood = comp["long_name"]
+                break
+
+    photo_urls = []
+    for photo in (place.get("photos") or [])[:3]:
+        ref = photo.get("photo_reference")
+        if ref:
+            photo_urls.append(
+                f"https://maps.googleapis.com/maps/api/place/photo"
+                f"?maxwidth=800&photo_reference={ref}&key={api_key}"
+            )
+
+    editorial = (place.get("editorial_summary") or {}).get("overview", "")
+    summary = _generate_gmaps_summary(
+        name=place.get("name", fallback_title),
+        type_label=type_label,
+        address=place.get("formatted_address", ""),
+        rating=rating,
+        review_count=review_count,
+        price=price or None,
+        hours=weekday_text,
+        editorial=editorial,
+    )
+
+    details = []
+    if neighborhood:
+        details.append(f"Located in {neighborhood}")
+    if price:
+        details.append(f"Price: {price}")
+    if type_label and type_label != "Place":
+        details.append(type_label)
+    if place.get("formatted_phone_number"):
+        details.append(f"Phone: {place['formatted_phone_number']}")
+
+    result = _gmaps_base_result(place.get("name", fallback_title))
+    result.update({
         "category": category,
-        "summary": (place.get("editorial_summary") or {}).get("overview", ""),
-        "address": place.get("formatted_address") or "",
-        "rating": str(rating) if rating else None,
-        "phone": place.get("formatted_phone_number"),
-        "hours": hours,
+        "card_description": summary,
+        "summary": summary,
+        "details": details,
+        "address": place.get("formatted_address", ""),
+        "city": neighborhood,
         "price": price,
-    }
+        "hours": hours_text,
+        "phone": place.get("formatted_phone_number", ""),
+        "cuisine": type_label,
+        "rating": rating_str,
+        "photo_urls": photo_urls,
+        "raw_rating": rating or 0,
+        "review_count": review_count,
+        "neighborhood": neighborhood,
+        "type_label": type_label,
+        "weekday_text": weekday_text,
+    })
+    _log.info("Enrichment complete → title: %r  address: %r  photos: %d",
+              result["title"], result["address"], len(photo_urls))
+    return result
+
+
+def _fetch_google_maps_place(url: str) -> dict:
+    """
+    Fetch rich place data from a Google Maps URL using Places API + Claude summary.
+    Returns extraction dict with standard fields + extended GMaps fields.
+    Logs each step to aid debugging wrong-place issues.
+    """
+    _log.info("=== GMaps extraction start ===")
+    _log.info("Original URL: %s", url)
+
+    # ── Step 1: Resolve shortened URLs (goo.gl, maps.app.goo.gl) ──────────────
+    resolved = url
+    if "goo.gl" in url:
+        try:
+            with httpx.Client(follow_redirects=True, timeout=10) as c:
+                r = c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resolved = str(r.url)
+            _log.info("Resolved short URL → %s", resolved)
+        except Exception as exc:
+            _log.warning("Short-URL resolution failed: %s", exc)
+    else:
+        _log.info("No short URL, using as-is")
+
+    # ── Step 2: Extract place identity from the resolved URL ───────────────────
+    place_id: Optional[str] = None
+    place_query: Optional[str] = None
+    lat_lng: Optional[str] = None
+
+    # 2a. Place ID embedded as !1sChIJ... in the path parameters
+    m = re.search(r"!1s(ChIJ[A-Za-z0-9_\-]+)", resolved)
+    if m:
+        place_id = m.group(1)
+        _log.info("Extracted Place ID from !1s pattern: %s", place_id)
+
+    # 2b. Place name in path: /maps/place/Name+of+Place/
+    if not place_id:
+        m = re.search(r"/maps/place/([^/@?&]+)", resolved)
+        if m:
+            place_query = urllib.parse.unquote_plus(m.group(1))
+            _log.info("Extracted place name from path: %r", place_query)
+
+    # 2c. ?q= query string
+    if not place_id and not place_query:
+        m = re.search(r"[?&]q=([^&]+)", resolved)
+        if m:
+            place_query = urllib.parse.unquote_plus(m.group(1))
+            _log.info("Extracted place name from ?q=: %r", place_query)
+
+    # 2d. Coordinates @lat,lng for location bias
+    m = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", resolved)
+    if m:
+        lat_lng = f"{m.group(1)},{m.group(2)}"
+        _log.info("Extracted coordinates for bias: %s", lat_lng)
+
+    if not place_id and not place_query:
+        _log.warning("Could not extract any place identity from URL")
+
+    fallback_title = place_query or "Google Maps place"
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        _log.warning("GOOGLE_PLACES_API_KEY not set — returning minimal result")
+        return _gmaps_base_result(fallback_title)
+
+    # ── Step 3: Get place_id if we don't already have one ─────────────────────
+    if not place_id:
+        search_input = place_query or resolved
+        params: dict = {
+            "input": search_input,
+            "inputtype": "textquery",
+            "fields": "place_id,name,formatted_address",
+            "key": api_key,
+        }
+        # Add coordinate-based location bias to disambiguate common names
+        if lat_lng:
+            params["locationbias"] = f"point:{lat_lng}"
+        _log.info("findplacefromtext query: %r  bias: %s", search_input, lat_lng or "none")
+        try:
+            with httpx.Client(timeout=10) as c:
+                r = c.get(
+                    "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+                    params=params,
+                )
+            fp_data = r.json()
+        except Exception as exc:
+            _log.error("findplacefromtext request failed: %s", exc)
+            return _gmaps_base_result(fallback_title)
+
+        _log.info("findplacefromtext status: %s  candidates: %d",
+                  fp_data.get("status"), len(fp_data.get("candidates", [])))
+        for i, c in enumerate(fp_data.get("candidates", [])[:3]):
+            _log.info("  candidate[%d]: place_id=%s  name=%s  address=%s",
+                      i, c.get("place_id"), c.get("name"), c.get("formatted_address"))
+
+        if fp_data.get("status") != "OK" or not fp_data.get("candidates"):
+            _log.warning("findplacefromtext returned no usable candidates")
+            return _gmaps_base_result(fallback_title)
+
+        place_id = fp_data["candidates"][0]["place_id"]
+        _log.info("Using place_id: %s", place_id)
+
+    # ── Step 4: Enrich using shared helper ────────────────────────────────────
+    enriched = _enrich_place_sync(place_id, api_key, fallback_title)
+    _log.info("=== GMaps extraction end ===")
+    return enriched
 
 
 def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
@@ -459,20 +727,25 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
                 })
             return
 
-        # Google Maps: use Places API instead of scraping
+        # Google Maps: rich place card via Places API + Claude summary
         if _is_google_maps_url(url):
             try:
                 ext = _fetch_google_maps_place(url)
+                photo_urls = ext.get("photo_urls", [])
                 lines = [f"Source: {url}", f"Title: {ext['title']}", f"Type: {ext['category']}"]
                 if ext.get("summary"):
                     lines.append(f"Summary: {ext['summary']}")
                 for k in ["address", "rating", "phone", "hours", "price"]:
                     if ext.get(k):
                         lines.append(f"{k.title()}: {ext[k]}")
-                _update_item(user_token, trip_id, item_id, {
+                updates: dict = {
                     "extraction": ext,
                     "content": "\n".join(lines),
-                })
+                    "is_gmaps": True,
+                }
+                if photo_urls:
+                    updates["og_image"] = photo_urls[0]
+                _update_item(user_token, trip_id, item_id, updates)
             except Exception:
                 _update_item(user_token, trip_id, item_id, {
                     "extraction": {"status": "failed", "title": "Google Maps place", "category": "attraction", "summary": ""},
@@ -485,11 +758,12 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
             return
         client = anthropic.Anthropic(api_key=api_key)
 
+        og_image = ""
         try:
             if "reddit.com/" in url:
                 page_text = _fetch_reddit_text_sync(url)
             else:
-                page_text = _fetch_url_text_sync(url)
+                page_text, og_image = _fetch_page_data(url)
         except Exception:
             page_text = None
 
@@ -499,7 +773,9 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
                     "status": "inaccessible",
                     "title": _url_to_title(url),
                     "category": "other",
+                    "card_description": "",
                     "summary": "",
+                    "details": [],
                 },
                 "content": f"Source: {url}\n[Page inaccessible — raw URL preserved]",
             })
@@ -507,10 +783,10 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
 
         response = client.messages.create(
             model="claude-opus-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             system=_LINK_SYSTEM,
             messages=[{"role": "user", "content":
-                f"Extract travel details from this page.\nURL: {url}\n\nContent:\n{page_text[:6000]}"}],
+                f"Extract travel details from this page.\nURL: {url}\n\nContent:\n{page_text[:8000]}"}],
             output_config={"format": {"type": "json_schema", "schema": _LINK_EXTRACTION_SCHEMA}},
         )
 
@@ -521,22 +797,25 @@ def _extract_link_sync(user_token: str, trip_id: str, item_id: str, url: str):
             f"Source: {url}",
             f"Title: {ext['title']}",
             f"Type: {ext['category']}",
-            f"Summary: {ext['summary']}",
+            f"Summary: {ext.get('summary', '')}",
         ]
         for k in ["address", "city", "country", "price", "check_in", "check_out",
                   "hours", "phone", "cuisine", "airline", "flight_number",
                   "departure", "arrival", "rating", "notes"]:
             if ext.get(k):
                 lines.append(f"{k.replace('_', ' ').title()}: {ext[k]}")
+        for d in (ext.get("details") or []):
+            if d:
+                lines.append(f"- {d}")
         if ext.get("status") == "inaccessible":
             lines.append("[Note: page is behind a paywall or login — consider pasting content manually]")
         elif ext.get("status") == "low_confidence":
             lines.append("[Note: limited info extracted — consider pasting page content manually]")
 
-        _update_item(user_token, trip_id, item_id, {
-            "extraction": ext,
-            "content": "\n".join(lines),
-        })
+        updates: dict = {"extraction": ext, "content": "\n".join(lines)}
+        if og_image:
+            updates["og_image"] = og_image
+        _update_item(user_token, trip_id, item_id, updates)
 
     except Exception:
         _update_item(user_token, trip_id, item_id, {
@@ -775,6 +1054,359 @@ async def delete_item(request: Request, trip_id: str, item_id: str):
         raise HTTPException(status_code=404, detail="Item not found")
     save_user_index(token, index)
     return {"ok": True}
+
+
+@app.patch("/api/trips/{trip_id}/items/{item_id}")
+async def patch_item(
+    request: Request,
+    trip_id: str,
+    item_id: str,
+    user_notes: Optional[str] = Form(None),
+):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    trip = index["trips"].get(trip_id)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    for item in trip["items"]:
+        if item["id"] == item_id:
+            if user_notes is not None:
+                item["user_notes"] = user_notes.strip()
+            save_user_index(token, index)
+            return {"ok": True, "item": item}
+    raise HTTPException(status_code=404, detail="Item not found")
+
+
+# ---------------------------------------------------------------------------
+# Agent research
+# ---------------------------------------------------------------------------
+
+_AGENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "places": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "city": {"type": "string"},
+                },
+                "required": ["name", "city"],
+                "additionalProperties": False,
+            },
+        },
+        "links": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "url":    {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["url", "reason"],
+                "additionalProperties": False,
+            },
+        },
+        "notes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "body":  {"type": "string"},
+                },
+                "required": ["title", "body"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["places", "links", "notes"],
+    "additionalProperties": False,
+}
+
+
+def _run_agent_sync(description: str, destination: str, start_date: str, end_date: str) -> dict:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    client = anthropic.Anthropic(api_key=api_key)
+    date_str = ""
+    if start_date and end_date:
+        date_str = f"{start_date} to {end_date}"
+    elif start_date:
+        date_str = f"starting {start_date}"
+    prompt = f"""You are a travel research agent. The user is planning the following trip:
+
+Destination: {destination or "Unknown"}
+Dates: {date_str or "Not specified"}
+Description: {description or "No description provided."}
+
+Your job is to compile a research set of exactly:
+- 5 Places (specific venues worth visiting — restaurants, bars, attractions, neighborhoods)
+- 5 Links (useful URLs — guides, articles, booking pages, event listings relevant to this trip)
+- 5 Notes (short practical notes — packing tips, local context, logistics, cultural advice)
+
+For Places: return the place name and city so it can be looked up via Google Places API.
+For Links: return a real, specific URL and a reason it's relevant.
+For Notes: write the full note text directly (2-4 sentences each). Title each note.
+
+Tailor everything tightly to the trip description, dates, and destination.
+Return only valid JSON."""
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+        output_config={"format": {"type": "json_schema", "schema": _AGENT_SCHEMA}},
+    )
+    return json.loads(response.content[0].text)
+
+
+def _agent_find_place_id_sync(name: str, city: str, api_key: str) -> Optional[str]:
+    """Text-search for a place by name+city and return its place_id, or None."""
+    query = f"{name}, {city}" if city else name
+    try:
+        with httpx.Client(timeout=10) as c:
+            r = c.get(
+                "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+                params={
+                    "input": query,
+                    "inputtype": "textquery",
+                    "fields": "place_id,name",
+                    "key": api_key,
+                },
+            )
+        data = r.json()
+        candidates = data.get("candidates") or []
+        if data.get("status") == "OK" and candidates:
+            return candidates[0]["place_id"]
+    except Exception:
+        pass
+    return None
+
+
+def _agent_save_place_sync(user_token: str, trip_id: str, place: dict) -> dict:
+    """Resolve place_id via text search, enrich via Places API, save as gmaps item."""
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY", "")
+    name = place.get("name", "Place")
+    city = place.get("city", "")
+    place_id = _agent_find_place_id_sync(name, city, api_key) if api_key else None
+    if place_id and api_key:
+        enriched = _enrich_place_sync(place_id, api_key, name)
+    else:
+        # Fallback: minimal item without Places API data
+        enriched = _gmaps_base_result(name)
+        enriched["summary"] = f"{name} in {city}" if city else name
+        enriched["card_description"] = enriched["summary"]
+        enriched["city"] = city
+    photo_urls = enriched.get("photo_urls", [])
+    item = {
+        "id": str(uuid.uuid4()),
+        "trip_id": trip_id,
+        "type": "link",
+        "url": f"https://www.google.com/maps/search/?q={urllib.parse.quote(f'{name} {city}')}",
+        "extraction": enriched,
+        "content": enriched.get("summary", ""),
+        "is_gmaps": True,
+        "agent_saved": True,
+        "created_at": datetime.now().isoformat(),
+    }
+    if photo_urls:
+        item["og_image"] = photo_urls[0]
+    index = load_user_index(user_token)
+    index["trips"][trip_id]["items"].append(item)
+    save_user_index(user_token, index)
+    return item
+
+
+def _agent_save_link_sync(user_token: str, trip_id: str, url: str) -> dict:
+    """Create a stub link item then run the full link extraction pipeline on it."""
+    item_id = str(uuid.uuid4())
+    stub = {
+        "id": item_id,
+        "trip_id": trip_id,
+        "type": "link",
+        "url": url,
+        "label": url,
+        "extraction": {"status": "pending", "title": url},
+        "content": url,
+        "agent_saved": True,
+        "created_at": datetime.now().isoformat(),
+    }
+    index = load_user_index(user_token)
+    index["trips"][trip_id]["items"].append(stub)
+    save_user_index(user_token, index)
+    # Enrich synchronously (runs Claude + OG fetch)
+    _extract_link_sync(user_token, trip_id, item_id, url)
+    # Re-load to get the enriched item; also stamp agent_saved
+    index = load_user_index(user_token)
+    for item in index["trips"][trip_id]["items"]:
+        if item["id"] == item_id:
+            item["agent_saved"] = True
+            save_user_index(user_token, index)
+            return item
+    return stub
+
+
+def _agent_save_note_sync(user_token: str, trip_id: str, note: dict) -> dict:
+    """Save an agent-written note directly."""
+    item = {
+        "id": str(uuid.uuid4()),
+        "trip_id": trip_id,
+        "type": "text",
+        "label": note.get("title", "Note"),
+        "content": note.get("body", ""),
+        "extraction": {
+            "status": "ok",
+            "title": note.get("title", "Note"),
+            "summary": note.get("body", ""),
+            "category": "other",
+            "address": "", "city": "", "country": "", "price": "",
+            "check_in": "", "check_out": "", "hours": "", "phone": "",
+            "cuisine": "", "airline": "", "flight_number": "",
+            "departure": "", "arrival": "", "rating": "", "notes": "",
+            "card_description": note.get("body", ""),
+            "details": [],
+        },
+        "agent_saved": True,
+        "created_at": datetime.now().isoformat(),
+    }
+    index = load_user_index(user_token)
+    index["trips"][trip_id]["items"].append(item)
+    save_user_index(user_token, index)
+    return item
+
+
+@app.get("/api/places/autocomplete")
+async def places_autocomplete(request: Request, input: str = "", session_token: str = ""):
+    get_user_token(request)  # auth check
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    if not api_key or not input.strip():
+        return {"predictions": []}
+    params = {
+        "input": input.strip(),
+        "types": "establishment",
+        "key": api_key,
+    }
+    if session_token:
+        params["sessiontoken"] = session_token
+    try:
+        with httpx.Client(timeout=8) as c:
+            r = c.get(
+                "https://maps.googleapis.com/maps/api/place/autocomplete/json",
+                params=params,
+            )
+        data = r.json()
+    except Exception:
+        return {"predictions": []}
+    predictions = []
+    for p in (data.get("predictions") or [])[:5]:
+        predictions.append({
+            "place_id": p.get("place_id", ""),
+            "name": p.get("structured_formatting", {}).get("main_text", p.get("description", "")),
+            "address": p.get("structured_formatting", {}).get("secondary_text", ""),
+            "description": p.get("description", ""),
+        })
+    return {"predictions": predictions}
+
+
+@app.post("/api/trips/{trip_id}/add-place")
+async def add_place(
+    request: Request,
+    trip_id: str,
+    place_id: str = Form(...),
+    place_name: Optional[str] = Form(None),
+):
+    user_token = get_user_token(request)
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Google Places API key not configured")
+
+    enriched = await asyncio.to_thread(
+        _enrich_place_sync, place_id, api_key, place_name or "Place"
+    )
+    photo_urls = enriched.get("photo_urls", [])
+
+    item_id = str(uuid.uuid4())
+    item = {
+        "id": item_id,
+        "trip_id": trip_id,
+        "type": "link",
+        "url": f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+        "extraction": enriched,
+        "content": enriched.get("summary", ""),
+        "is_gmaps": True,
+        "created_at": datetime.now().isoformat(),
+    }
+    if photo_urls:
+        item["og_image"] = photo_urls[0]
+
+    index = load_user_index(user_token)
+    if trip_id not in index.get("trips", {}):
+        raise HTTPException(status_code=404, detail="Trip not found")
+    index["trips"][trip_id]["items"].append(item)
+    save_user_index(user_token, index)
+    return item
+
+
+@app.post("/api/trips/{trip_id}/agent-research")
+async def agent_research(
+    request: Request,
+    trip_id: str,
+    description: Optional[str] = Form(None),
+    destination: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    if trip_id not in index["trips"]:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    desc = (description or "").strip()
+    dest = (destination or "").strip()
+    sd = (start_date or "").strip()
+    ed = (end_date or "").strip()
+
+    async def generate():
+        try:
+            trip_name = index["trips"][trip_id].get("name", dest or "your trip")
+            yield f"event: step_start\ndata: {json.dumps({'message': f'✦ Starting research for {trip_name}…'})}\n\n"
+            result = await asyncio.to_thread(_run_agent_sync, desc, dest, sd, ed)
+
+            # ── Places ────────────────────────────────────────────────────────
+            yield f"event: step_start\ndata: {json.dumps({'message': '📍 Finding places…'})}\n\n"
+            for place in (result.get("places") or [])[:5]:
+                item = await asyncio.to_thread(_agent_save_place_sync, token, trip_id, place)
+                title = item.get("extraction", {}).get("title") or place.get("name", "Place")
+                yield f"event: item_saved\ndata: {json.dumps({**item, '_feed_title': title})}\n\n"
+                await asyncio.sleep(0.05)
+
+            # ── Links ─────────────────────────────────────────────────────────
+            yield f"event: step_start\ndata: {json.dumps({'message': '🔗 Finding links…'})}\n\n"
+            for link in (result.get("links") or [])[:5]:
+                url = (link.get("url") or "").strip()
+                if not url:
+                    continue
+                item = await asyncio.to_thread(_agent_save_link_sync, token, trip_id, url)
+                title = item.get("extraction", {}).get("title") or url
+                yield f"event: item_saved\ndata: {json.dumps({**item, '_feed_title': title})}\n\n"
+                await asyncio.sleep(0.05)
+
+            # ── Notes ─────────────────────────────────────────────────────────
+            yield f"event: step_start\ndata: {json.dumps({'message': '📝 Writing notes…'})}\n\n"
+            for note in (result.get("notes") or [])[:5]:
+                item = await asyncio.to_thread(_agent_save_note_sync, token, trip_id, note)
+                title = note.get("title", "Note")
+                yield f"event: item_saved\ndata: {json.dumps({**item, '_feed_title': title})}\n\n"
+                await asyncio.sleep(0.05)
+
+            total = len(result.get("places", [])) + len(result.get("links", [])) + len(result.get("notes", []))
+            yield f"event: complete\ndata: {json.dumps({'message': f'✦ Research complete — {total} items saved to your trip'})}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 def _extract_metadata_sync(user_token: str, trip_id: str):
@@ -1083,7 +1715,7 @@ async def chat(
             # Fall back to raw items
             for item in trip["items"]:
                 if item.get("content"):
-                    trip_ctx += f"\n\n[{item['label'] or item['type']}]:\n{item['content']}"
+                    trip_ctx += f"\n\n[{item.get('label') or item.get('type', 'item')}]:\n{item['content']}"
 
     system = (
         "You are Apollo, an AI travel assistant. You have access to the user's saved "
@@ -1104,7 +1736,6 @@ async def chat(
             max_tokens=1024,
             system=system,
             messages=messages,
-            thinking={"type": "adaptive"},
         ) as stream:
             for text in stream.text_stream:
                 yield f"data: {json.dumps({'text': text})}\n\n"

@@ -129,7 +129,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 #trip-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
 .trip-header { padding: 28px 40px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-shrink: 0; }
 .trip-header-info { flex: 1; }
-.trip-name { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.trip-name { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; cursor: pointer; display: inline-block; border-radius: 6px; }
+.trip-name:hover { color: var(--navy); }
+.trip-name:hover::after { content: ' ✏'; font-size: 1rem; opacity: 0.4; vertical-align: middle; }
 .trip-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 0.88rem; margin-bottom: 4px; flex-wrap: wrap; }
 .trip-meta-item { display: flex; align-items: center; gap: 5px; }
 .trip-description { font-size: 0.88rem; color: var(--muted); }
@@ -217,6 +219,46 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .card-pending { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
 .spinner { display: inline-block; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+#agent-feed { padding: 16px 24px 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
+.feed-step { font-size: 0.88rem; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.feed-saved { font-size: 0.82rem; color: var(--text); margin: 3px 0 3px 20px; }
+.feed-complete { font-size: 0.88rem; font-weight: 600; color: #16a34a; margin-top: 10px; }
+.feed-error { font-size: 0.85rem; color: var(--danger); margin-top: 8px; }
+/* GMaps / link cards with image */
+.card-img-placeholder { width: 100%; height: 160px; background: var(--sidebar-bg); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; }
+.card-meta-row { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+.detail-rating { font-size: 1rem; font-weight: 700; color: #f59e0b; margin-bottom: 4px; }
+.detail-meta-row { font-size: 0.85rem; color: var(--muted); margin-bottom: 14px; }
+.detail-place-row { font-size: 0.88rem; color: var(--text); margin-bottom: 8px; line-height: 1.4; }
+/* Link cards with image */
+.content-card.link-card { padding: 0; overflow: hidden; }
+.link-card .card-img { width: 100%; height: 160px; object-fit: cover; display: block; }
+.link-card .card-body { padding: 14px 16px 16px; }
+.card-note-badge { font-size: 0.72rem; color: var(--accent); margin-top: 6px; font-weight: 500; }
+.card-agent-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; color: var(--muted); background: #f1f1f4; border-radius: 20px; padding: 2px 7px; margin-top: 6px; font-weight: 500; }
+/* Link detail two-column modal */
+#detail-modal-box { padding: 0 !important; overflow: hidden !important; }
+.detail-link { display: flex; min-height: 400px; }
+.detail-link-img { width: 42%; flex-shrink: 0; }
+.detail-link-img img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px 0 0 16px; }
+.detail-img-placeholder { width: 100%; height: 100%; min-height: 260px; background: var(--sidebar-bg); border-radius: 16px 0 0 16px; }
+.detail-link-content { flex: 1; padding: 28px; overflow-y: auto; max-height: 88vh; position: relative; }
+.detail-link-title { font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 12px; line-height: 1.35; padding-right: 16px; }
+.detail-link-summary { font-size: 0.9rem; line-height: 1.65; color: var(--text); margin-bottom: 16px; }
+.detail-bullets { padding: 0 0 0 18px; margin: 0 0 16px; }
+.detail-bullets li { font-size: 0.88rem; line-height: 1.55; color: var(--text); margin-bottom: 5px; }
+.detail-actions { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.detail-notes-section { margin-top: 4px; }
+.detail-notes-ta { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; font-family: var(--font); resize: vertical; min-height: 80px; outline: none; color: var(--text); }
+.detail-notes-ta:focus { border-color: var(--accent); }
+.detail-added { font-size: 0.78rem; color: var(--muted); margin-top: 16px; }
+.detail-delete-btn { background: none; border: none; color: #e53e3e; font-size: 0.82rem; cursor: pointer; padding: 0; }
+.detail-delete-btn:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .detail-link { flex-direction: column; }
+  .detail-link-img { width: 100%; height: 200px; }
+  .detail-link-img img, .detail-img-placeholder { height: 200px; border-radius: 16px 16px 0 0; }
+}
 .empty-cards { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty-cards p { margin-bottom: 16px; font-size: 0.92rem; }
 
@@ -292,6 +334,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .content-type-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
 .content-type-tab { padding: 8px 16px; font-size: 0.85rem; font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
 .content-type-tab.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+.place-autocomplete-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 100; overflow: hidden; margin-top: 4px; }
+.place-autocomplete-item { padding: 11px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.12s; }
+.place-autocomplete-item:last-child { border-bottom: none; }
+.place-autocomplete-item:hover { background: #f5f7ff; }
+.pac-name { font-size: 0.9rem; font-weight: 600; color: var(--navy); }
+.pac-address { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
 
 /* ── Buttons ─────────────────────────────────────────────── */
 .btn-primary {
@@ -357,6 +405,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
           <button class="form-tab active" onclick="switchFormTab('manual',this)">Manual Entry</button>
           <button class="form-tab" onclick="switchFormTab('upload',this)">Upload</button>
           <button class="form-tab" onclick="switchFormTab('templates',this)">Templates</button>
+          <button class="form-tab" onclick="switchFormTab('agent',this)">Agent ✦</button>
         </div>
 
         <!-- Manual Entry -->
@@ -410,6 +459,33 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
             <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
           </div>
         </div>
+
+        <!-- Agent -->
+        <div class="form-panel" id="form-agent">
+          <p style="color:var(--muted);font-size:0.9rem;margin-bottom:20px">Describe your trip and let Apollo autonomously research restaurants, bars, and activities — then save them directly to your trip.</p>
+          <div class="form-group">
+            <label>Destination *</label>
+            <input type="text" id="agent-destination" placeholder="e.g., Nashville, TN" />
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Start Date</label>
+              <input type="text" id="agent-start" placeholder="e.g., Apr 14" />
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>End Date</label>
+              <input type="text" id="agent-end" placeholder="e.g., Apr 19" />
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:16px">
+            <label>Describe your trip</label>
+            <textarea id="agent-description" placeholder="e.g., A long weekend for my cousin's wedding. We want great food, live music bars, and maybe some outdoor activities."></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" id="agent-start-btn" onclick="startAgentResearch()">✦ Research My Trip</button>
+            <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -421,7 +497,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
         <div id="trip-main">
           <div class="trip-header">
             <div class="trip-header-info">
-              <h1 class="trip-name" id="trip-name-display"></h1>
+              <h1 class="trip-name" id="trip-name-display" onclick="showEditTrip()" title="Click to edit"></h1>
               <div class="trip-meta" id="trip-meta-display"></div>
               <div class="trip-description" id="trip-desc-display"></div>
             </div>
@@ -434,6 +510,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 
           <!-- Research -->
           <div class="trip-panel active" id="panel-research">
+            <div id="agent-feed" style="display:none"></div>
             <div class="content-grid" id="content-grid"></div>
           </div>
 
@@ -561,6 +638,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
       <button class="content-type-tab" onclick="switchContentType('text',this)">Text</button>
       <button class="content-type-tab" onclick="switchContentType('file',this)">File</button>
       <button class="content-type-tab" onclick="switchContentType('bookmarks',this)">Bookmarks</button>
+      <button class="content-type-tab" onclick="switchContentType('place',this)">📍 Place</button>
     </div>
 
     <!-- Link -->
@@ -596,6 +674,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
         <input type="file" id="add-file-input" style="display:none" accept="image/*,.pdf" onchange="updateFileLabel(this)" />
       </div>
       <div id="file-chosen-label" style="font-size:0.85rem;color:var(--muted);margin-top:8px;text-align:center"></div>
+    </div>
+
+    <!-- Place Search -->
+    <div id="add-place-panel" style="display:none">
+      <div class="form-group" style="position:relative">
+        <label>Search for a place</label>
+        <input type="text" id="place-search-input" placeholder="e.g., Nobu Nashville, The Standard Hotel…"
+          oninput="onPlaceSearchInput(this.value)" autocomplete="off" />
+        <div id="place-autocomplete-dropdown" class="place-autocomplete-dropdown" style="display:none"></div>
+      </div>
+      <div id="place-selected-preview" style="display:none;padding:12px 14px;background:#f0f4ff;border-radius:10px;font-size:0.88rem;margin-top:4px">
+        <strong id="place-selected-name"></strong>
+        <div id="place-selected-address" style="color:var(--muted);margin-top:3px;font-size:0.82rem"></div>
+      </div>
     </div>
 
     <!-- Bookmarks -->
@@ -661,18 +753,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 
 <!-- Item Detail Modal -->
 <div class="modal-overlay" id="modal-item-detail">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-header">
-      <div id="detail-type-badge" class="card-type"></div>
-      <button class="modal-close" onclick="closeModal('modal-item-detail')">✕</button>
-    </div>
-    <h2 id="detail-title" style="font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:16px"></h2>
-    <img id="detail-thumb" src="" alt="" style="display:none;width:100%;border-radius:10px;margin-bottom:16px">
-    <div id="detail-fields" style="display:flex;flex-direction:column;gap:12px"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-      <div id="detail-date" style="font-size:0.8rem;color:var(--muted)"></div>
-      <button id="detail-delete-btn" onclick="deleteItem()" style="background:none;border:none;color:#e53e3e;font-size:0.85rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .12s" onmouseover="this.style.background='rgba(229,62,62,.08)'" onmouseout="this.style.background='none'">Delete</button>
-    </div>
+  <div class="modal" id="detail-modal-box" style="max-width:560px">
+    <div id="detail-body"></div>
   </div>
 </div>
 
@@ -948,6 +1030,89 @@ async function suggestTripName() {
   }, 600);
 }
 
+async function startAgentResearch() {
+  const destination = document.getElementById('agent-destination').value.trim();
+  const description = document.getElementById('agent-description').value.trim();
+  const startDate = document.getElementById('agent-start').value;
+  const endDate = document.getElementById('agent-end').value;
+
+  if (!destination) { toast('Destination is required'); return; }
+
+  const btn = document.getElementById('agent-start-btn');
+  btn.disabled = true;
+  btn.textContent = '✦ Starting…';
+
+  // Create the trip first
+  const fd = new FormData();
+  fd.append('location', destination);
+  fd.append('start_date', startDate);
+  fd.append('end_date', endDate);
+  fd.append('description', description);
+  const trip = await fetch('/api/trips', { method: 'POST', body: fd }).then(r => r.json());
+
+  // Navigate to the new trip
+  await loadTrips();
+  selectTrip(trip.id);
+
+  // Show and clear the agent feed
+  const feed = document.getElementById('agent-feed');
+  feed.style.display = 'block';
+  feed.innerHTML = '';
+
+  // Stream research from backend
+  const rfd = new FormData();
+  rfd.append('description', description);
+  rfd.append('destination', destination);
+  rfd.append('start_date', startDate);
+  rfd.append('end_date', endDate);
+
+  try {
+    const res = await fetch(`/api/trips/${trip.id}/agent-research`, { method: 'POST', body: rfd });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let currentEvent = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value);
+      for (const line of text.split('\n')) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          try {
+            const data = JSON.parse(line.slice(5).trim());
+            if (currentEvent === 'step_start') {
+              feed.innerHTML += `<div class="feed-step">${escHtml(data.message)}</div>`;
+            } else if (currentEvent === 'item_saved') {
+              const title = data._feed_title || data.extraction?.title || data.label || 'Saved';
+              feed.innerHTML += `<div class="feed-saved">  ✓ Saved: ${escHtml(title)}</div>`;
+              feed.scrollTop = feed.scrollHeight;
+              const t = trips.find(t => t.id === trip.id);
+              if (t) { t.items.push(data); renderContentGrid(); }
+            } else if (currentEvent === 'complete') {
+              feed.innerHTML += `<div class="feed-complete">${escHtml(data.message)}</div>`;
+              setTimeout(() => { feed.style.display = 'none'; }, 4000);
+              toast('Research complete!');
+            } else if (currentEvent === 'error') {
+              feed.innerHTML += `<div class="feed-error">Error: ${escHtml(data.message)}</div>`;
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {
+    feed.innerHTML += `<div class="feed-error">Connection error — please try again.</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✦ Research My Trip';
+  ['agent-description', 'agent-destination', 'agent-start', 'agent-end'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+
 async function createTripManual() {
   const name = document.getElementById('new-trip-name').value.trim();
   if (!name) { toast('Trip name is required'); return; }
@@ -1118,6 +1283,11 @@ function showAddContent() {
   document.getElementById('add-text-panel').style.display = 'none';
   document.getElementById('add-file-panel').style.display = 'none';
   document.getElementById('add-bookmarks-panel').style.display = 'none';
+  document.getElementById('add-place-panel').style.display = 'none';
+  document.getElementById('place-search-input').value = '';
+  document.getElementById('place-autocomplete-dropdown').style.display = 'none';
+  document.getElementById('place-selected-preview').style.display = 'none';
+  _selectedPlace = null;
   document.getElementById('add-content-btn').textContent = 'Add Content';
   document.getElementById('add-content-btn').onclick = submitAddContent;
   openModal('modal-add-content');
@@ -1131,10 +1301,14 @@ function switchContentType(type, btn) {
   document.getElementById('add-text-panel').style.display = type === 'text' ? 'block' : 'none';
   document.getElementById('add-file-panel').style.display = type === 'file' ? 'block' : 'none';
   document.getElementById('add-bookmarks-panel').style.display = type === 'bookmarks' ? 'block' : 'none';
+  document.getElementById('add-place-panel').style.display = type === 'place' ? 'block' : 'none';
   const btn2 = document.getElementById('add-content-btn');
   if (type === 'bookmarks') {
     btn2.textContent = 'Import Bookmarks';
     btn2.onclick = importBookmarks;
+  } else if (type === 'place') {
+    btn2.textContent = 'Add Place';
+    btn2.onclick = submitAddPlace;
   } else {
     btn2.textContent = 'Add Content';
     btn2.onclick = submitAddContent;
@@ -1168,6 +1342,75 @@ async function importBookmarks() {
   renderContentGrid();
   startPollingIfNeeded();
   toast(`Imported ${data.imported} bookmark${data.imported === 1 ? '' : 's'} — extracting details in background`);
+}
+
+// ── Place Search ──────────────────────────────────────────────────────────────
+let _selectedPlace = null;
+let _placeSearchTimeout = null;
+let _placeSessionToken = null;
+let _placeResults = [];
+
+function onPlaceSearchInput(value) {
+  clearTimeout(_placeSearchTimeout);
+  document.getElementById('place-selected-preview').style.display = 'none';
+  _selectedPlace = null;
+  if (!value.trim()) {
+    document.getElementById('place-autocomplete-dropdown').style.display = 'none';
+    return;
+  }
+  _placeSearchTimeout = setTimeout(() => searchPlaces(value), 350);
+}
+
+async function searchPlaces(query) {
+  if (!_placeSessionToken) _placeSessionToken = Math.random().toString(36).slice(2);
+  const params = new URLSearchParams({ input: query, session_token: _placeSessionToken });
+  try {
+    const res = await fetch(`/api/places/autocomplete?${params}`);
+    if (!res.ok) return;
+    const { predictions } = await res.json();
+    const dd = document.getElementById('place-autocomplete-dropdown');
+    if (!predictions.length) { dd.style.display = 'none'; return; }
+    _placeResults = predictions;
+    dd.innerHTML = predictions.map((p, i) => `
+      <div class="place-autocomplete-item" onclick="selectPlace(${i})">
+        <div class="pac-name">${p.name}</div>
+        ${p.address ? `<div class="pac-address">${p.address}</div>` : ''}
+      </div>`).join('');
+    dd.style.display = 'block';
+  } catch {}
+}
+
+function selectPlace(i) {
+  const p = _placeResults[i];
+  if (!p) return;
+  _selectedPlace = p;
+  _placeSessionToken = null; // consume session
+  document.getElementById('place-autocomplete-dropdown').style.display = 'none';
+  document.getElementById('place-search-input').value = p.name;
+  document.getElementById('place-selected-name').textContent = p.name;
+  document.getElementById('place-selected-address').textContent = p.address || '';
+  document.getElementById('place-selected-preview').style.display = 'block';
+}
+
+async function submitAddPlace() {
+  if (!activeTripId) return;
+  if (!_selectedPlace) { toast('Search for and select a place first'); return; }
+  const btn = document.getElementById('add-content-btn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  const fd = new FormData();
+  fd.append('place_id', _selectedPlace.place_id);
+  fd.append('place_name', _selectedPlace.name);
+  try {
+    const res = await fetch(`/api/trips/${activeTripId}/add-place`, { method: 'POST', body: fd });
+    if (!res.ok) { const e = await res.json().catch(()=>{}); toast(e?.detail || 'Failed to add place'); return; }
+    const item = await res.json();
+    const trip = trips.find(t => t.id === activeTripId);
+    if (trip) { trip.items = trip.items || []; trip.items.push(item); }
+    closeModal('modal-add-content');
+    renderContentGrid();
+    toast(`Added ${_selectedPlace.name}`);
+  } catch { toast('Failed to add place'); }
+  finally { btn.disabled = false; btn.textContent = 'Add Place'; }
 }
 
 async function submitAddContent() {
@@ -1223,71 +1466,274 @@ function renderContentGrid() {
   grid.innerHTML = [...trip.items].reverse().map(item => renderCard(item)).join('');
 }
 
+function _gmapsTypeIcon(typeLabel) {
+  const icons = { 'Restaurant':'🍽️','Café':'☕','Bar':'🍸','Hotel':'🏨','Museum':'🏛️','Park':'🌳','Attraction':'🎡','Shopping':'🛍️','Spa':'💆','Fitness':'💪','Transit':'🚌' };
+  return icons[typeLabel] || '📍';
+}
+
 function renderCard(item) {
   const ext = item.extraction || {};
   const status = ext.status || '';
   const isTikTok = /tiktok\.com/i.test(item.url || '');
-  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? `🔗 LINK` : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : `📎 FILE`;
+  const isLink = item.type === 'link';
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : isLink ? '🔗 LINK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : '📎 FILE';
   const title = ext.title || item.label || item.filename || (item.url ? new URL(item.url).hostname.replace('www.','') : 'Untitled');
-  const preview = ext.summary || (item.content ? item.content.replace(/\n/g,' ').slice(0,100) : '');
-  const pending = status === 'pending' || (!status && item.type === 'link');
+  const pending = status === 'pending' || (!status && isLink);
+  const notesBadge = item.user_notes ? `<div class="card-note-badge">📝 Note added</div>` : '';
+  const agentBadge = item.agent_saved ? `<div class="card-agent-badge">✦ Agent</div>` : '';
+  const onclick = `showItemDetail(${escHtml(JSON.stringify(JSON.stringify(item)))})`;
+
+  // Google Maps place card
+  if (item.is_gmaps) {
+    const tl = ext.type_label || ext.cuisine || '';
+    const imgHtml = item.og_image
+      ? `<img class="card-img" src="${escHtml(item.og_image)}" alt="" loading="lazy" onerror="this.style.display='none;this.nextSibling.style.display=flex'">`
+      : `<div class="card-img-placeholder">${_gmapsTypeIcon(tl)}</div>`;
+    const ratingNum = ext.raw_rating;
+    const stars = ratingNum ? `★ ${ratingNum}` : '';
+    const price = ext.price || '';
+    const nbhd = ext.neighborhood || ext.city || '';
+    const metaParts = [stars, price, nbhd].filter(Boolean);
+    return `<div class="content-card link-card" onclick="${onclick}">
+      ${imgHtml}
+      <div class="card-body">
+        <div class="card-type">📍 PLACE</div>
+        <div class="card-title">${escHtml(title)}</div>
+        ${metaParts.length ? `<div class="card-meta-row">${escHtml(metaParts.join(' · '))}</div>` : ''}
+        ${notesBadge}${agentBadge}
+      </div>
+    </div>`;
+  }
+
+  // Rich link card (image-first layout)
+  if (isLink && !isTikTok) {
+    const imgHtml = item.og_image
+      ? `<img class="card-img" src="${escHtml(item.og_image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : '';
+    const description = ext.card_description || ext.summary || (item.content ? item.content.replace(/\n/g,' ').slice(0,120) : '');
+    return `<div class="content-card link-card" onclick="${onclick}">
+      ${imgHtml}
+      <div class="card-body">
+        <div class="card-type">${typeLabel}</div>
+        <div class="card-title">${escHtml(title)}</div>
+        ${description ? `<div class="card-preview">${escHtml(description)}</div>` : ''}
+        ${pending ? `<div class="card-pending"><span class="spinner">⟳</span> Extracting details…</div>` : ''}
+        ${notesBadge}${agentBadge}
+      </div>
+    </div>`;
+  }
+
+  // TikTok / non-link items — original layout
   const thumbHtml = isTikTok && ext.thumbnail_url
     ? `<img src="${escHtml(ext.thumbnail_url)}" class="card-thumb" alt="thumbnail">` : '';
-
-  return `<div class="content-card" onclick="showItemDetail(${escHtml(JSON.stringify(JSON.stringify(item)))})">
+  const preview = ext.summary || (item.content ? item.content.replace(/\n/g,' ').slice(0,100) : '');
+  return `<div class="content-card" onclick="${onclick}">
     <div class="card-type">${typeLabel}</div>
     <div class="card-title">${escHtml(title)}</div>
     ${preview ? `<div class="card-preview">${escHtml(preview)}</div>` : ''}
     ${pending ? `<div class="card-pending"><span class="spinner">⟳</span> Extracting details…</div>` : ''}
     ${thumbHtml}
+    ${notesBadge}${agentBadge}
   </div>`;
 }
 
 function showItemDetail(itemJson) {
   const item = JSON.parse(itemJson);
+  const isTikTok = /tiktok\.com/i.test(item.url || '');
+  const overlay = document.getElementById('modal-item-detail');
+  const box = document.getElementById('detail-modal-box');
+  overlay.dataset.itemId = item.id;
+  if (item.is_gmaps) {
+    box.style.maxWidth = '820px';
+    document.getElementById('detail-body').innerHTML = _buildGmapsDetail(item);
+  } else if (item.type === 'link' && !isTikTok) {
+    box.style.maxWidth = '820px';
+    document.getElementById('detail-body').innerHTML = _buildLinkDetail(item);
+  } else {
+    box.style.maxWidth = '560px';
+    document.getElementById('detail-body').innerHTML = _buildGenericDetail(item);
+  }
+  openModal('modal-item-detail');
+}
+
+function _buildGmapsDetail(item) {
+  const ext = item.extraction || {};
+  const title = ext.title || 'Google Maps Place';
+  const summary = ext.summary || '';
+  const photoUrls = ext.photo_urls || (item.og_image ? [item.og_image] : []);
+  const ratingNum = ext.raw_rating || 0;
+  const reviewCount = ext.review_count || 0;
+  const price = ext.price || '';
+  const typeLabel = ext.type_label || ext.cuisine || '';
+  const neighborhood = ext.neighborhood || ext.city || '';
+  const address = ext.address || '';
+  const weekdayText = ext.weekday_text || [];
+  const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
+  const hasNotes = !!item.user_notes;
+
+  // Show today's hours (Google weekday_text starts Sunday in US)
+  let todayHours = '';
+  if (weekdayText.length) {
+    const idx = new Date().getDay(); // 0=Sun, per JS
+    todayHours = weekdayText[idx] || weekdayText[0] || '';
+  }
+
+  const imgSide = photoUrls.length
+    ? `<img src="${escHtml(photoUrls[0])}" alt="" onerror="this.style.display='none'">`
+    : `<div class="detail-img-placeholder" style="display:flex;align-items:center;justify-content:center;font-size:3.5rem">${_gmapsTypeIcon(typeLabel)}</div>`;
+
+  const metaParts = [price, typeLabel, neighborhood].filter(Boolean);
+  const ratingHtml = ratingNum
+    ? `<div class="detail-rating">★ ${ratingNum}${reviewCount ? ` <span style="color:var(--muted);font-size:0.85rem;font-weight:400">(${reviewCount.toLocaleString()} reviews)</span>` : ''}</div>`
+    : '';
+
+  return `<div class="detail-link">
+    <div class="detail-link-img">${imgSide}</div>
+    <div class="detail-link-content">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
+        <span class="card-type">📍 PLACE</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="detail-delete-btn" id="detail-delete-btn" onclick="deleteItem()">Delete</button>
+          <button class="modal-close" onclick="closeModal('modal-item-detail')">✕</button>
+        </div>
+      </div>
+      <h2 class="detail-link-title">${escHtml(title)}</h2>
+      ${ratingHtml}
+      ${metaParts.length ? `<div class="detail-meta-row">${escHtml(metaParts.join(' · '))}</div>` : ''}
+      ${summary ? `<p class="detail-link-summary">${escHtml(summary)}</p>` : ''}
+      ${address ? `<div class="detail-place-row">📍 ${escHtml(address)}</div>` : ''}
+      ${todayHours ? `<div class="detail-place-row">🕐 ${escHtml(todayHours)}</div>` : ''}
+      <div class="detail-actions">
+        <button class="btn-secondary" id="detail-notes-toggle" onclick="toggleDetailNotes()">${hasNotes ? '📝 Edit Notes' : 'Add Notes →'}</button>
+        ${item.url ? `<a href="${escHtml(item.url)}" target="_blank" class="btn-secondary" style="text-decoration:none">Google Maps →</a>` : ''}
+      </div>
+      <div class="detail-notes-section" id="detail-notes-section" style="${hasNotes ? '' : 'display:none'}">
+        <textarea class="detail-notes-ta" id="detail-notes-ta" placeholder="Add your personal notes here…">${escHtml(item.user_notes || '')}</textarea>
+        <button class="btn-primary" onclick="saveItemNote()" style="margin-top:8px;width:100%">Save Note</button>
+      </div>
+      ${added ? `<div class="detail-added">Added ${added}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function _buildLinkDetail(item) {
+  const ext = item.extraction || {};
+  const title = ext.title || item.label || 'Untitled';
+  const summary = ext.summary || '';
+  const details = Array.isArray(ext.details) ? ext.details.filter(Boolean) : [];
+  const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
+  const hasNotes = !!item.user_notes;
+
+  const imgSide = item.og_image
+    ? `<img src="${escHtml(item.og_image)}" alt="" onerror="this.parentElement.innerHTML='<div class=detail-img-placeholder></div>'">`
+    : '<div class="detail-img-placeholder"></div>';
+
+  const bulletHtml = details.length
+    ? `<ul class="detail-bullets">${details.map(d => `<li>${escHtml(d)}</li>`).join('')}</ul>`
+    : (() => {
+        const legacy = [['address','Address'],['city','City'],['price','Price'],['hours','Hours'],
+          ['phone','Phone'],['cuisine','Cuisine'],['rating','Rating']];
+        const rows = legacy.filter(([k]) => ext[k])
+          .map(([k,l]) => `<li><strong>${l}:</strong> ${escHtml(ext[k])}</li>`).join('');
+        return rows ? `<ul class="detail-bullets">${rows}</ul>` : '';
+      })();
+
+  return `<div class="detail-link">
+    <div class="detail-link-img">${imgSide}</div>
+    <div class="detail-link-content">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
+        <span class="card-type">🔗 LINK</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="detail-delete-btn" id="detail-delete-btn" onclick="deleteItem()">Delete</button>
+          <button class="modal-close" onclick="closeModal('modal-item-detail')">✕</button>
+        </div>
+      </div>
+      <h2 class="detail-link-title">${escHtml(title)}</h2>
+      ${summary ? `<p class="detail-link-summary">${escHtml(summary)}</p>` : ''}
+      ${bulletHtml}
+      <div class="detail-actions">
+        <button class="btn-secondary" id="detail-notes-toggle" onclick="toggleDetailNotes()">${hasNotes ? '📝 Edit Notes' : 'Add Notes →'}</button>
+        ${item.url ? `<a href="${escHtml(item.url)}" target="_blank" class="btn-secondary" style="text-decoration:none">Visit Site →</a>` : ''}
+      </div>
+      <div class="detail-notes-section" id="detail-notes-section" style="${hasNotes ? '' : 'display:none'}">
+        <textarea class="detail-notes-ta" id="detail-notes-ta" placeholder="Add your personal notes here…">${escHtml(item.user_notes || '')}</textarea>
+        <button class="btn-primary" onclick="saveItemNote()" style="margin-top:8px;width:100%">Save Note</button>
+      </div>
+      ${added ? `<div class="detail-added">Added ${added}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function _buildGenericDetail(item) {
   const ext = item.extraction || {};
   const isTikTok = /tiktok\.com/i.test(item.url || '');
-  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'link' ? '🔗 LINK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : '📎 FILE';
+  const typeLabel = isTikTok ? '🎵 TIKTOK' : item.type === 'text' ? '📝 NOTE' : item.type === 'email' ? '📧 EMAIL' : item.file_kind === 'image' ? '🖼️ IMAGE' : '📎 FILE';
   const title = ext.title || item.label || item.filename || 'Untitled';
-
-  document.getElementById('detail-type-badge').textContent = typeLabel;
-  document.getElementById('detail-title').textContent = title;
-
-  // Thumbnail
-  const thumb = document.getElementById('detail-thumb');
-  if (isTikTok && ext.thumbnail_url) { thumb.src = ext.thumbnail_url; thumb.style.display = 'block'; }
-  else { thumb.style.display = 'none'; }
-
-  // Fields
+  const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
   const fields = [];
   if (item.url) fields.push(['URL', `<a href="${escHtml(item.url)}" target="_blank" style="color:var(--accent)">${escHtml(item.url)}</a>`]);
   if (ext.summary) fields.push(['Summary', escHtml(ext.summary)]);
-  if (item.content && !ext.summary) fields.push(['Content', escHtml(item.content.slice(0, 500) + (item.content.length > 500 ? '…' : ''))]);
-  const detailKeys = [['address','Address'],['city','City'],['country','Country'],['price','Price'],
-    ['check_in','Check-in'],['check_out','Check-out'],['hours','Hours'],['phone','Phone'],
-    ['cuisine','Cuisine'],['airline','Airline'],['flight_number','Flight'],
-    ['departure','Departure'],['arrival','Arrival'],['rating','Rating'],['notes','Notes']];
-  detailKeys.forEach(([k, lbl]) => { if (ext[k]) fields.push([lbl, escHtml(ext[k])]); });
+  if (item.content && !ext.summary) fields.push(['Content', escHtml(item.content.slice(0,500) + (item.content.length > 500 ? '…' : ''))]);
+  [['address','Address'],['city','City'],['country','Country'],['price','Price'],
+   ['check_in','Check-in'],['check_out','Check-out'],['hours','Hours'],['phone','Phone'],
+   ['cuisine','Cuisine'],['airline','Airline'],['flight_number','Flight'],
+   ['departure','Departure'],['arrival','Arrival'],['rating','Rating'],['notes','Notes']]
+    .forEach(([k,lbl]) => { if (ext[k]) fields.push([lbl, escHtml(ext[k])]); });
 
-  document.getElementById('detail-fields').innerHTML = fields.map(([lbl, val]) =>
-    `<div><div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">${lbl}</div>
-     <div style="font-size:0.9rem;color:var(--text)">${val}</div></div>`
-  ).join('');
+  return `<div style="padding:32px">
+    <div class="modal-header">
+      <div class="card-type">${typeLabel}</div>
+      <button class="modal-close" onclick="closeModal('modal-item-detail')">✕</button>
+    </div>
+    <h2 style="font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:16px">${escHtml(title)}</h2>
+    ${isTikTok && ext.thumbnail_url ? `<img src="${escHtml(ext.thumbnail_url)}" style="width:100%;border-radius:10px;margin-bottom:16px">` : ''}
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${fields.map(([lbl,val]) => `<div><div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">${lbl}</div><div style="font-size:0.9rem;color:var(--text)">${val}</div></div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:0.8rem;color:var(--muted)">${added ? `Added ${added}` : ''}</div>
+      <button id="detail-delete-btn" onclick="deleteItem()" style="background:none;border:none;color:#e53e3e;font-size:0.85rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .12s">Delete</button>
+    </div>
+  </div>`;
+}
 
-  // Date
-  const added = item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) : '';
-  document.getElementById('detail-date').textContent = added ? `Added ${added}` : '';
+function toggleDetailNotes() {
+  const section = document.getElementById('detail-notes-section');
+  if (!section) return;
+  const hidden = section.style.display === 'none';
+  section.style.display = hidden ? 'block' : 'none';
+  if (hidden) document.getElementById('detail-notes-ta')?.focus();
+}
 
-  document.getElementById('modal-item-detail').dataset.itemId = item.id;
-  openModal('modal-item-detail');
+async function saveItemNote() {
+  const itemId = document.getElementById('modal-item-detail').dataset.itemId;
+  if (!itemId || !activeTripId) return;
+  const ta = document.getElementById('detail-notes-ta');
+  if (!ta) return;
+  const notes = ta.value.trim();
+  const fd = new FormData();
+  fd.append('user_notes', notes);
+  const res = await fetch(`/api/trips/${activeTripId}/items/${itemId}`, { method: 'PATCH', body: fd });
+  if (res.ok) {
+    const trip = trips.find(t => t.id === activeTripId);
+    if (trip) {
+      const it = trip.items.find(i => i.id === itemId);
+      if (it) it.user_notes = notes;
+      renderContentGrid();
+    }
+    const btn = document.getElementById('detail-notes-toggle');
+    if (btn) btn.textContent = notes ? '📝 Edit Notes' : 'Add Notes →';
+    toast('Note saved');
+  } else {
+    toast('Failed to save note');
+  }
 }
 
 async function deleteItem() {
   const itemId = document.getElementById('modal-item-detail').dataset.itemId;
   if (!itemId || !activeTripId) return;
   const btn = document.getElementById('detail-delete-btn');
-  btn.textContent = 'Deleting…';
-  btn.disabled = true;
+  if (btn) { btn.textContent = 'Deleting…'; btn.disabled = true; }
   const res = await fetch(`/api/trips/${activeTripId}/items/${itemId}`, { method: 'DELETE' });
   if (res.ok) {
     closeModal('modal-item-detail');
@@ -1295,8 +1741,7 @@ async function deleteItem() {
     renderContentGrid();
     toast('Item deleted');
   } else {
-    btn.textContent = 'Delete';
-    btn.disabled = false;
+    if (btn) { btn.textContent = 'Delete'; btn.disabled = false; }
     toast('Failed to delete');
   }
 }
