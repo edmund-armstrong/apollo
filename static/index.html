@@ -141,7 +141,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 #add-content-bar { display: none; }
 
 /* ── Chat panel ──────────────────────────────────────────── */
-#chat-panel { display: none; flex-direction: column; background: #fff; }
+#chat-panel { display: none; flex-direction: column; background: #fff; box-shadow: -4px 0 20px rgba(0,0,0,0.08); }
 #chat-panel.open { display: flex; }
 .chat-panel-header { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .chat-panel-header h3 { font-size: 1rem; font-weight: 700; color: var(--navy); }
@@ -193,8 +193,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
   .trip-nav-link:hover { color: var(--navy); }
   .trip-nav-link.active { color: var(--navy); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
   .trip-nav-sep { color: var(--border); font-size: 0.85rem; user-select: none; }
-  #chat-panel, #itinerary-panel { width: 0; flex-shrink: 0; overflow: hidden; border-left: 0; transition: width 0.2s ease; display: flex; flex-direction: column; }
-  #chat-panel.open, #itinerary-panel.open { width: 340px; border-left: 1px solid var(--border); }
+  #itinerary-panel { width: 0; flex-shrink: 0; overflow: hidden; border-left: 0; transition: width 0.2s ease; display: flex; flex-direction: column; }
+  #itinerary-panel.open { width: 340px; border-left: 1px solid var(--border); }
+  #chat-panel.open { position: fixed; right: 0; top: 0; bottom: 0; width: 340px; border-left: 1px solid var(--border); z-index: 40; }
   .chat-panel-header { padding: 24px 24px 16px; }
   #itinerary-panel-area { flex: 1; overflow-y: auto; padding: 20px 24px; }
   #add-content-bar { display: block; padding: 12px 48px 20px; background: linear-gradient(transparent, #fff 30%); flex-shrink: 0; }
@@ -304,6 +305,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 /* ── Settings View ───────────────────────────────────────── */
 #view-settings { padding: 40px 48px; max-width: 860px; }
 #view-settings h1 { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 24px; }
+/* ── Travel Bank ─────────────────────────────────────── */
+.bank-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 40px 32px 24px; gap: 16px; }
+.bank-title { font-size: 1.8rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.bank-sub { color: var(--muted); font-size: 0.92rem; }
+.bank-filters { display: flex; gap: 8px; padding: 0 32px 20px; flex-wrap: wrap; }
+.bank-filter-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: white; font-size: 0.82rem; color: var(--muted); cursor: pointer; font-family: var(--font); transition: all .15s; }
+.bank-filter-btn.active { background: var(--navy); color: white; border-color: var(--navy); font-weight: 600; }
+.bank-trip-label { font-size: 0.7rem; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 5px; }
+.bank-unassigned-label { font-size: 0.7rem; color: var(--muted); font-weight: 500; margin-top: 5px; }
+.bank-assign-btn { font-size: 0.75rem; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; margin-top: 4px; font-family: var(--font); }
+.bank-assign-btn:hover { text-decoration: underline; }
+#bank-chat-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+
 .settings-section { margin-bottom: 40px; }
 .settings-section-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 16px; }
 .gmail-connect-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 24px; }
@@ -379,6 +393,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
     <div class="section-label">Upcoming Trips</div>
     <div class="trip-list" id="trip-list"></div>
     <div class="sidebar-footer">
+      <button class="sidebar-link" id="bank-sidebar-btn" onclick="showBank()">🏦 Travel Bank</button>
       <button class="sidebar-link" id="settings-sidebar-btn" onclick="showSettings()">⚙️ Settings</button>
     </div>
   </aside>
@@ -534,28 +549,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
           <div id="itinerary-panel-area"></div>
         </div>
 
-        <!-- Chat panel: right panel on desktop, overlay on mobile -->
-        <div id="chat-panel">
-          <div class="chat-panel-header">
-            <h3>Chat</h3>
-            <button class="chat-panel-close" onclick="toggleChat()">✕</button>
-          </div>
-          <div class="chat-starter-wrap" id="chat-starter-wrap" style="display:none">
-            <button class="chat-starter-chip" id="chat-starter-btn" onclick="submitStarter()"></button>
-          </div>
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input-area">
-            <div style="display:flex;align-items:center;gap:8px">
-              <button class="location-toggle" id="location-toggle-btn" onclick="toggleLocation()">📍 Use my location</button>
-              <span id="location-error"></span>
-            </div>
-            <div class="chat-input-row">
-              <input type="text" id="chat-input" placeholder="Ask anything about your trip…" onkeydown="if(event.key==='Enter')sendChat()" />
-              <button class="btn-primary" onclick="sendChat()">Send</button>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
 
@@ -580,7 +573,44 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
       </button>
     </div>
 
-    <!-- Settings View -->
+    <!-- Global Chat Panel (accessible from any view) -->
+    <div id="chat-panel">
+      <div class="chat-panel-header">
+        <h3>Chat</h3>
+        <button class="chat-panel-close" onclick="toggleChat()">✕</button>
+      </div>
+      <div class="chat-starter-wrap" id="chat-starter-wrap" style="display:none">
+        <button class="chat-starter-chip" id="chat-starter-btn" onclick="submitStarter()"></button>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-area">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="location-toggle" id="location-toggle-btn" onclick="toggleLocation()">📍 Use my location</button>
+          <span id="location-error"></span>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Ask anything about your trip…" onkeydown="if(event.key==='Enter')sendChat()" />
+          <button class="btn-primary" onclick="sendChat()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Travel Bank -->
+    <div class="view" id="view-bank">
+      <div class="bank-header">
+        <div>
+          <h1 class="bank-title">Travel Bank</h1>
+          <p class="bank-sub">All your saved items — across every trip, plus unassigned saves. <span id="bank-forward-hint" style="display:none">Forward emails to <button onclick="copyInboundAddress()" id="bank-forward-addr" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;padding:0;font-family:inherit;text-decoration:underline"></button></span></p>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-secondary" id="bank-chat-btn" onclick="toggleChat()">💬 Chat</button>
+          <button class="btn-primary" onclick="showBankAdd()">+ Add to Bank</button>
+        </div>
+      </div>
+      <div class="bank-filters" id="bank-filters"></div>
+      <div class="content-grid" id="bank-grid" style="padding:0 32px 32px"></div>
+    </div>
+
     <div class="view" id="view-settings">
       <div style="padding:40px 48px;max-width:760px">
         <h1 style="font-size:1.8rem;font-weight:700;color:var(--navy);margin-bottom:32px">Settings</h1>
@@ -601,6 +631,27 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
             </div>
             <div id="gmail-connected" style="display:none">
               <div style="display:flex;align-items:center;gap:8px;color:green;font-weight:600;margin-bottom:12px">✓ Connected</div>
+            </div>
+          </div>
+
+          <div class="gmail-connect-card" style="margin-top:16px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+              <span style="font-size:1.2rem">📬</span>
+              <div>
+                <div style="font-weight:600;font-size:0.95rem">Forward Emails to Travel Bank</div>
+                <div style="font-size:0.82rem;color:var(--muted)">Forward booking confirmations, travel articles, or any email directly to your Travel Bank</div>
+              </div>
+            </div>
+            <div id="inbound-address-wrap" style="display:none">
+              <div style="font-size:0.82rem;color:var(--muted);margin-bottom:8px">Your unique inbound address:</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <code id="inbound-address-display" style="flex:1;padding:10px 14px;background:#f5f7ff;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;color:var(--navy);word-break:break-all"></code>
+                <button class="btn-secondary" onclick="copyInboundAddress()" style="flex-shrink:0">Copy</button>
+              </div>
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:8px">Forward any travel email to this address and it will appear in your Travel Bank automatically.</div>
+            </div>
+            <div id="inbound-address-unavailable" style="display:none;font-size:0.85rem;color:var(--muted)">
+              Configure <code>MAILGUN_INBOUND_DOMAIN</code> and <code>MAILGUN_API_KEY</code> in your environment to enable email forwarding.
             </div>
           </div>
 
@@ -772,6 +823,9 @@ let chatHistory = [];
 let chatPanelOpen = false;
 let itineraryPanelOpen = false;
 let pollTimer = null;
+let _bankAddMode = false;
+let _bankData = { bank_items: [], trip_items: [] };
+let _bankFilter = 'all';
 
 const TEMPLATES = [
   { icon: '🏙️', name: 'City Break', desc: 'Short urban getaway', location: '', start: '', end: '', desc_text: 'Urban exploration trip' },
@@ -850,7 +904,10 @@ function toast(msg) {
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'modal-add-content') _bankAddMode = false;
+}
 
 // Close modal on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el => {
@@ -965,7 +1022,8 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
   document.getElementById('settings-sidebar-btn').classList.toggle('active', name === 'settings');
-  document.getElementById('bottom-rail').classList.toggle('visible', name === 'trip');
+  document.getElementById('bank-sidebar-btn').classList.toggle('active', name === 'bank');
+  document.getElementById('bottom-rail').classList.toggle('visible', name === 'trip' || name === 'bank');
 }
 
 function showNewTrip() {
@@ -976,6 +1034,174 @@ function showNewTrip() {
 function showSettings() {
   checkGmailStatus();
   showView('settings');
+}
+
+// ─────────────────────────────────────────────────
+// Travel Bank
+// ─────────────────────────────────────────────────
+async function showBank() {
+  showView('bank');
+  document.querySelectorAll('.trip-item').forEach(el => el.classList.remove('active'));
+  await loadBankData();
+  if (!_inboundAddress) loadInboundAddress();
+}
+
+async function loadBankData() {
+  try {
+    const res = await fetch('/api/bank');
+    if (res.ok) _bankData = await res.json();
+  } catch {}
+  renderBankFilters();
+  renderBankGrid();
+}
+
+function renderBankFilters() {
+  const tripIds = [...new Set(_bankData.trip_items.map(i => i._trip_id))];
+  const tripNames = {};
+  _bankData.trip_items.forEach(i => { tripNames[i._trip_id] = i._trip_name; });
+  const filters = [
+    { id: 'all', label: `All (${_bankData.bank_items.length + _bankData.trip_items.length})` },
+    { id: 'unassigned', label: `Unassigned (${_bankData.bank_items.length})` },
+    ...tripIds.map(id => ({ id, label: tripNames[id] || id })),
+  ];
+  document.getElementById('bank-filters').innerHTML = filters.map(f =>
+    `<button class="bank-filter-btn${_bankFilter === f.id ? ' active' : ''}" onclick="setBankFilter('${f.id}')">${escHtml(f.label)}</button>`
+  ).join('');
+}
+
+function setBankFilter(id) {
+  _bankFilter = id;
+  renderBankFilters();
+  renderBankGrid();
+}
+
+function renderBankGrid() {
+  const grid = document.getElementById('bank-grid');
+  let items = [];
+  if (_bankFilter === 'all') {
+    items = [
+      ..._bankData.bank_items.map(i => ({ ...i, _source: 'bank' })),
+      ..._bankData.trip_items.map(i => ({ ...i, _source: 'trip' })),
+    ];
+  } else if (_bankFilter === 'unassigned') {
+    items = _bankData.bank_items.map(i => ({ ...i, _source: 'bank' }));
+  } else {
+    items = _bankData.trip_items.filter(i => i._trip_id === _bankFilter).map(i => ({ ...i, _source: 'trip' }));
+  }
+
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty-cards" style="grid-column:1/-1">
+      <p>No items yet. Add links, notes, or places to your Travel Bank.</p>
+      <button class="btn-primary" onclick="showBankAdd()">+ Add to Bank</button>
+    </div>`;
+    return;
+  }
+
+  // Sort newest first
+  items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+  grid.innerHTML = items.map(item => {
+    const base = renderCard(item);
+    // Inject trip label or unassigned label + assign button before closing card div
+    const label = item._source === 'bank'
+      ? `<div class="bank-unassigned-label">Unassigned</div><button class="bank-assign-btn" onclick="event.stopPropagation();showAssignItem('${item.id}')">+ Add to trip</button>`
+      : `<div class="bank-trip-label">📂 ${escHtml(item._trip_name || '')}</div>`;
+    return base.replace(/<\/div>\s*$/, label + '</div>');
+  }).join('');
+}
+
+function showBankAdd() {
+  // Open the add-content modal but route submissions to bank endpoints
+  _bankAddMode = true;
+  showAddContent();
+}
+
+// Override submitAddContent to support bank mode
+const _origSubmitAddContent = submitAddContent;
+async function submitAddContent() {
+  if (!_bankAddMode) { await _origSubmitAddContent(); return; }
+  const fd = new FormData();
+  if (currentContentType === 'link') {
+    let url = document.getElementById('add-link-url').value.trim();
+    if (!url) { toast('URL is required'); return; }
+    if (!/^https?:\/\//i.test(url) && /\S+\.[a-z]{2,}\/\S+/i.test(url)) url = 'https://' + url;
+    fd.append('content_type', 'link');
+    fd.append('url', url);
+    fd.append('label', document.getElementById('add-link-label').value.trim());
+  } else if (currentContentType === 'text') {
+    const content = document.getElementById('add-text-content').value.trim();
+    if (!content) { toast('Content is required'); return; }
+    fd.append('content_type', 'text');
+    fd.append('text', content);
+    fd.append('label', document.getElementById('add-text-label').value.trim());
+  } else if (currentContentType === 'file') {
+    const file = document.getElementById('add-file-input').files[0];
+    if (!file) { toast('Please choose a file'); return; }
+    fd.append('content_type', 'file');
+    fd.append('file', file);
+  } else if (currentContentType === 'place') {
+    if (!_selectedPlace) { toast('Search for and select a place first'); return; }
+    const btn = document.getElementById('add-content-btn');
+    btn.disabled = true; btn.textContent = 'Adding…';
+    const pfd = new FormData();
+    pfd.append('place_id', _selectedPlace.place_id);
+    pfd.append('place_name', _selectedPlace.name);
+    try {
+      const res = await fetch('/api/bank/add-place', { method: 'POST', body: pfd });
+      if (!res.ok) { toast('Failed to add place'); return; }
+      const item = await res.json();
+      _bankData.bank_items.push(item);
+      closeModal('modal-add-content');
+      renderBankFilters(); renderBankGrid();
+      toast(`Added ${_selectedPlace.name} to Travel Bank`);
+    } catch { toast('Failed'); }
+    finally { btn.disabled = false; btn.textContent = 'Add Content'; _bankAddMode = false; }
+    return;
+  } else { return; }
+
+  const btn = document.getElementById('add-content-btn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  const res = await fetch('/api/bank/upload', { method: 'POST', body: fd });
+  btn.disabled = false; btn.textContent = 'Add Content';
+  if (!res.ok) { toast('Failed to add'); return; }
+  const data = await res.json();
+  _bankData.bank_items.push(data.item);
+  closeModal('modal-add-content');
+  renderBankFilters(); renderBankGrid();
+  toast('Added to Travel Bank!');
+  _bankAddMode = false;
+  if (data.item.type === 'link') setTimeout(loadBankData, 4000); // re-poll after extraction
+}
+
+async function showAssignItem(itemId) {
+  if (!trips.length) { toast('No trips to assign to'); return; }
+  const tripName = await new Promise(resolve => {
+    const opts = trips.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+    const sel = document.createElement('div');
+    sel.innerHTML = `<select id="_assign-sel" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:0.9rem;width:100%">${opts}</select>`;
+    // Use a simple modal prompt
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `<div style="background:white;border-radius:16px;padding:28px;width:360px;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+      <h3 style="font-size:1.1rem;font-weight:700;color:var(--navy);margin-bottom:16px">Add to Trip</h3>
+      <select id="_assign-sel" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:0.9rem;width:100%;margin-bottom:20px">${opts}</select>
+      <div style="display:flex;gap:10px">
+        <button id="_assign-ok" class="btn-primary" style="flex:1">Add to Trip</button>
+        <button id="_assign-cancel" class="btn-secondary">Cancel</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#_assign-ok').onclick = () => { resolve(overlay.querySelector('#_assign-sel').value); document.body.removeChild(overlay); };
+    overlay.querySelector('#_assign-cancel').onclick = () => { resolve(null); document.body.removeChild(overlay); };
+  });
+  if (!tripName) return;
+  const fd = new FormData();
+  fd.append('trip_id', tripName);
+  const res = await fetch(`/api/bank/items/${itemId}/assign`, { method: 'POST', body: fd });
+  if (!res.ok) { toast('Failed to assign'); return; }
+  await loadTrips();
+  await loadBankData();
+  toast('Moved to trip!');
 }
 
 // ─────────────────────────────────────────────────
@@ -1238,12 +1464,17 @@ function toggleChat() {
   document.getElementById('chat-panel').classList.toggle('open', chatPanelOpen);
   document.getElementById('nav-chat-btn')?.classList.toggle('active', chatPanelOpen);
   document.getElementById('rail-chat')?.classList.toggle('active', chatPanelOpen);
+  document.getElementById('bank-chat-btn')?.classList.toggle('active', chatPanelOpen);
   if (chatPanelOpen) {
     const trip = trips.find(t => t.id === activeTripId);
     const wrap = document.getElementById('chat-starter-wrap');
     const btn = document.getElementById('chat-starter-btn');
-    if (trip && chatHistory.length === 0) {
-      btn.textContent = `Questions about your ${trip.name}?`;
+    if (chatHistory.length === 0) {
+      if (trip) {
+        btn.textContent = `Questions about your ${trip.name}?`;
+      } else {
+        btn.textContent = `Ask anything about your saved trips and places`;
+      }
       wrap.style.display = 'block';
     } else {
       wrap.style.display = 'none';
@@ -1907,6 +2138,35 @@ async function checkGmailStatus() {
     document.getElementById('gmail-connected').style.display = service.connected ? 'block' : 'none';
     document.getElementById('gmail-scan-card').style.display = service.connected ? 'block' : 'none';
   } catch {}
+  loadInboundAddress();
+}
+
+let _inboundAddress = null;
+
+async function loadInboundAddress() {
+  try {
+    const data = await fetch('/api/email/inbound-address').then(r => r.json());
+    if (data.address) {
+      _inboundAddress = data.address;
+      document.getElementById('inbound-address-display').textContent = data.address;
+      document.getElementById('inbound-address-wrap').style.display = 'block';
+      document.getElementById('inbound-address-unavailable').style.display = 'none';
+      // Show hint in bank header
+      const hint = document.getElementById('bank-forward-hint');
+      const addrBtn = document.getElementById('bank-forward-addr');
+      if (hint && addrBtn) { addrBtn.textContent = data.address; hint.style.display = 'inline'; }
+    } else {
+      document.getElementById('inbound-address-wrap').style.display = 'none';
+      document.getElementById('inbound-address-unavailable').style.display = 'block';
+    }
+  } catch {}
+}
+
+function copyInboundAddress() {
+  if (!_inboundAddress) return;
+  navigator.clipboard.writeText(_inboundAddress).then(() => toast('Address copied!')).catch(() => {
+    prompt('Copy your inbound address:', _inboundAddress);
+  });
 }
 
 function renderGmailTripSelect() {

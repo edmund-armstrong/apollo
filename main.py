@@ -6,6 +6,8 @@ import asyncio
 import re
 import logging
 import urllib.parse
+import hmac
+import hashlib
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [gmaps] %(message)s")
@@ -134,8 +136,11 @@ def user_index_file(token: str) -> Path:
 def load_user_index(token: str) -> dict:
     f = user_index_file(token)
     if f.exists():
-        return json.loads(f.read_text())
-    return {"trips": {}}
+        data = json.loads(f.read_text())
+        if "bank" not in data:
+            data["bank"] = []
+        return data
+    return {"trips": {}, "bank": []}
 
 
 def save_user_index(token: str, index: dict):
@@ -1075,6 +1080,354 @@ async def patch_item(
             save_user_index(token, index)
             return {"ok": True, "item": item}
     raise HTTPException(status_code=404, detail="Item not found")
+
+
+# ---------------------------------------------------------------------------
+# Travel Bank
+# ---------------------------------------------------------------------------
+
+@app.get("/api/bank")
+async def get_bank(request: Request):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    # Collect all trip items annotated with trip info
+    trip_items = []
+    for trip_id, trip in index.get("trips", {}).items():
+        for item in trip.get("items", []):
+            trip_items.append({**item, "_trip_id": trip_id, "_trip_name": trip.get("name", "")})
+    return {"bank_items": index.get("bank", []), "trip_items": trip_items}
+
+
+@app.post("/api/bank/upload")
+async def bank_upload(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    content_type: str = Form(...),
+    text: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    label: Optional[str] = Form(None),
+):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    client = get_client()
+
+    item = {"id": str(uuid.uuid4())[:8], "type": content_type, "label": label or "", "created_at": datetime.now().isoformat()}
+
+    if content_type in ("text", "email"):
+        item["content"] = text
+        item["file_id"] = None
+
+    elif content_type == "link":
+        if not url:
+            raise HTTPException(status_code=400, detail="No URL provided")
+        item["url"] = url
+        item["content"] = f"Source: {url}"
+        item["extraction"] = {"status": "pending", "title": _url_to_title(url), "category": "other", "summary": ""}
+        item["file_id"] = None
+
+    elif content_type in ("image", "file"):
+        if not file:
+            raise HTTPException(status_code=400, detail="No file provided")
+        raw = await file.read()
+        mime = file.content_type or "application/octet-stream"
+        uploaded = client.beta.files.upload(file=(file.filename, raw, mime))
+        file_kind = "document" if mime == "application/pdf" else "image"
+        item["type"] = "file"
+        item["file_kind"] = file_kind
+        item["file_id"] = uploaded.id
+        item["filename"] = file.filename
+        item["mime"] = mime
+        item["content"] = None
+        item["extraction"] = {"status": "pending", "title": file.filename, "category": "other", "summary": ""}
+
+    index["bank"].append(item)
+    save_user_index(token, index)
+
+    if content_type == "link":
+        background_tasks.add_task(_bank_extract_link_background, token, item["id"], url)
+
+    return {"ok": True, "item": item}
+
+
+async def _bank_extract_link_background(token: str, item_id: str, url: str):
+    await asyncio.to_thread(_bank_extract_link_sync, token, item_id, url)
+
+
+def _update_bank_item(token: str, item_id: str, updates: dict):
+    index = load_user_index(token)
+    for i, item in enumerate(index["bank"]):
+        if item["id"] == item_id:
+            index["bank"][i].update(updates)
+            save_user_index(token, index)
+            return
+
+
+def _bank_extract_link_sync(token: str, item_id: str, url: str):
+    """Run link extraction for a bank item by routing through _extract_link_sync
+    via a temporary single-trip context, then moving the result to the bank."""
+    # We attach the item to a temp slot in the index, run extraction, then move it back.
+    # Simpler: just replicate the update pattern using _update_bank_item.
+    try:
+        if _is_google_maps_url(url):
+            ext = _fetch_google_maps_place(url)
+            photo_urls = ext.get("photo_urls", [])
+            updates: dict = {"extraction": ext, "content": ext.get("summary", ""), "is_gmaps": True}
+            if photo_urls:
+                updates["og_image"] = photo_urls[0]
+            _update_bank_item(token, item_id, updates)
+            return
+
+        if _is_tiktok_url(url):
+            try:
+                oembed = _fetch_tiktok_oembed(url)
+                ext = {
+                    "status": "extracted",
+                    "title": oembed.get("title", "TikTok video"),
+                    "category": "other",
+                    "summary": f"By @{oembed.get('author_name', 'unknown')} on TikTok",
+                    "thumbnail_url": oembed.get("thumbnail_url", ""),
+                    "embed_html": oembed.get("html", ""),
+                }
+                _update_bank_item(token, item_id, {"extraction": ext, "content": f"Source: {url}"})
+            except Exception:
+                pass
+            return
+
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+        client = anthropic.Anthropic(api_key=api_key)
+
+        og_image = ""
+        try:
+            page_text, og_image = _fetch_page_data(url)
+        except Exception:
+            page_text = None
+
+        if not page_text or len(page_text.strip()) < 80:
+            _update_bank_item(token, item_id, {
+                "extraction": {"status": "inaccessible", "title": _url_to_title(url),
+                               "category": "other", "card_description": "", "summary": "", "details": []},
+                "content": f"Source: {url}",
+            })
+            return
+
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=512,
+            messages=[{"role": "user", "content": f"URL: {url}\n\nContent:\n{page_text[:6000]}"}],
+            system=_LINK_SYSTEM,
+            output_config={"format": {"type": "json_schema", "schema": _LINK_EXTRACTION_SCHEMA}},
+        )
+        ext = json.loads(response.content[0].text)
+        ext["status"] = "extracted"
+        lines = [f"Source: {url}", f"Title: {ext.get('title','')}", f"Summary: {ext.get('summary','')}"]
+        updates = {"extraction": ext, "content": "\n".join(lines)}
+        if og_image:
+            updates["og_image"] = og_image
+        _update_bank_item(token, item_id, updates)
+    except Exception:
+        pass
+
+
+@app.post("/api/bank/add-place")
+async def bank_add_place(
+    request: Request,
+    place_id: str = Form(...),
+    place_name: Optional[str] = Form(None),
+):
+    token = get_user_token(request)
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Google Places API key not configured")
+    enriched = await asyncio.to_thread(_enrich_place_sync, place_id, api_key, place_name or "Place")
+    photo_urls = enriched.get("photo_urls", [])
+    item = {
+        "id": str(uuid.uuid4()),
+        "type": "link",
+        "url": f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+        "extraction": enriched,
+        "content": enriched.get("summary", ""),
+        "is_gmaps": True,
+        "created_at": datetime.now().isoformat(),
+    }
+    if photo_urls:
+        item["og_image"] = photo_urls[0]
+    index = load_user_index(token)
+    index["bank"].append(item)
+    save_user_index(token, index)
+    return item
+
+
+@app.delete("/api/bank/items/{item_id}")
+async def delete_bank_item(request: Request, item_id: str):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    index["bank"] = [i for i in index["bank"] if i["id"] != item_id]
+    save_user_index(token, index)
+    return {"ok": True}
+
+
+@app.post("/api/bank/items/{item_id}/assign")
+async def assign_bank_item(request: Request, item_id: str, trip_id: str = Form(...)):
+    token = get_user_token(request)
+    index = load_user_index(token)
+    if trip_id not in index.get("trips", {}):
+        raise HTTPException(status_code=404, detail="Trip not found")
+    item = next((i for i in index["bank"] if i["id"] == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    index["bank"] = [i for i in index["bank"] if i["id"] != item_id]
+    item["trip_id"] = trip_id
+    index["trips"][trip_id]["items"].append(item)
+    save_user_index(token, index)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Mailgun inbound email → Travel Bank
+# ---------------------------------------------------------------------------
+
+EMAIL_ROUTES_FILE = STORAGE_DIR / "email_routes.json"
+
+
+def _load_email_routes() -> dict:
+    if EMAIL_ROUTES_FILE.exists():
+        return json.loads(EMAIL_ROUTES_FILE.read_text())
+    return {}
+
+
+def _save_email_routes(routes: dict):
+    EMAIL_ROUTES_FILE.write_text(json.dumps(routes, indent=2))
+
+
+def _get_or_create_inbound_address(token: str) -> str:
+    """Return the inbound email prefix for this user, creating one if needed."""
+    routes = _load_email_routes()
+    # Check if user already has an address
+    for prefix, t in routes.items():
+        if t == token:
+            return prefix
+    # Create a new short stable prefix from the token
+    prefix = hashlib.sha256(token.encode()).hexdigest()[:12]
+    routes[prefix] = token
+    _save_email_routes(routes)
+    return prefix
+
+
+def _verify_mailgun_signature(api_key: str, timestamp: str, token: str, signature: str) -> bool:
+    digest = hmac.new(
+        key=api_key.encode("utf-8"),
+        msg=f"{timestamp}{token}".encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(digest, signature)
+
+
+@app.get("/api/email/inbound-address")
+async def get_inbound_address(request: Request):
+    token = get_user_token(request)
+    prefix = _get_or_create_inbound_address(token)
+    domain = os.getenv("MAILGUN_INBOUND_DOMAIN", "")
+    address = f"{prefix}@{domain}" if domain else None
+    return {"address": address, "prefix": prefix, "domain": domain}
+
+
+@app.post("/api/email/inbound")
+async def email_inbound(request: Request, background_tasks: BackgroundTasks):
+    form = await request.form()
+
+    # Verify Mailgun webhook signature
+    mg_key = os.getenv("MAILGUN_API_KEY", "")
+    if mg_key:
+        ts = form.get("timestamp", "")
+        tok = form.get("token", "")
+        sig = form.get("signature", "")
+        if not _verify_mailgun_signature(mg_key, ts, tok, sig):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+    # Resolve recipient → user token
+    recipient = form.get("recipient", "")
+    prefix = recipient.split("@")[0].lower() if "@" in recipient else recipient
+    routes = _load_email_routes()
+    user_token = routes.get(prefix)
+    if not user_token:
+        # Unknown address — return 200 so Mailgun doesn't retry
+        return {"ok": False, "reason": "unknown recipient"}
+
+    subject = form.get("subject", "(no subject)")
+    sender = form.get("sender") or form.get("from", "")
+    body = form.get("stripped-text") or form.get("body-plain", "")
+    body_html = form.get("body-html", "")
+
+    background_tasks.add_task(
+        _process_inbound_email, user_token, sender, subject, body, body_html
+    )
+    return {"ok": True}
+
+
+def _process_inbound_email(
+    user_token: str, sender: str, subject: str, body: str, body_html: str
+):
+    """Save email to Travel Bank and extract any URLs found in the body."""
+    try:
+        index = load_user_index(user_token)
+        now = datetime.now().isoformat()
+
+        # Save the email itself as a bank text item
+        email_item = {
+            "id": str(uuid.uuid4())[:8],
+            "type": "email",
+            "label": subject,
+            "content": f"From: {sender}\nSubject: {subject}\n\n{body}".strip(),
+            "extraction": {
+                "status": "ok",
+                "title": subject,
+                "category": "other",
+                "summary": body[:300] if body else "",
+                "card_description": body[:200] if body else "",
+                "details": [f"From: {sender}"] if sender else [],
+                "address": "", "city": "", "country": "", "price": "",
+                "check_in": "", "check_out": "", "hours": "", "phone": "",
+                "cuisine": "", "airline": "", "flight_number": "",
+                "departure": "", "arrival": "", "rating": "", "notes": "",
+            },
+            "created_at": now,
+        }
+        index["bank"].append(email_item)
+        save_user_index(user_token, index)
+
+        # Extract URLs from body and save each as a bank link item
+        urls = re.findall(r'https?://[^\s\'"<>()]+', body or body_html)
+        # Deduplicate, skip tracking/unsubscribe noise
+        seen = set()
+        skip_patterns = re.compile(
+            r'(unsubscribe|tracking|pixel|click\.|open\.|beacon|mailchimp|sendgrid|mandrillapp)',
+            re.I
+        )
+        for url in urls:
+            url = url.rstrip(".,;)")
+            if url in seen or skip_patterns.search(url):
+                continue
+            seen.add(url)
+            link_item_id = str(uuid.uuid4())[:8]
+            link_item = {
+                "id": link_item_id,
+                "type": "link",
+                "label": "",
+                "url": url,
+                "content": f"Source: {url}",
+                "extraction": {"status": "pending", "title": _url_to_title(url), "category": "other", "summary": ""},
+                "created_at": now,
+            }
+            index = load_user_index(user_token)
+            index["bank"].append(link_item)
+            save_user_index(user_token, index)
+            # Enrich each link
+            _bank_extract_link_sync(user_token, link_item_id, url)
+    except Exception as e:
+        _log.error("inbound email processing error: %s", e)
 
 
 # ---------------------------------------------------------------------------
