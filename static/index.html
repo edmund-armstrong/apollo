@@ -2100,7 +2100,12 @@ async function sendChat() {
 
   const fd = new FormData();
   fd.append('message', msg);
-  if (activeTripId) fd.append('trip_id', activeTripId);
+  const inBankView = document.getElementById('view-bank')?.classList.contains('active');
+  if (inBankView) {
+    fd.append('bank_mode', 'true');
+  } else if (activeTripId) {
+    fd.append('trip_id', activeTripId);
+  }
   fd.append('history', JSON.stringify(chatHistory));
   if (coords) {
     fd.append('latitude', coords.lat);

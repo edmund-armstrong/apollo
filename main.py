@@ -2041,6 +2041,7 @@ async def chat(
     request: Request,
     message: str = Form(...),
     trip_id: Optional[str] = Form(None),
+    bank_mode: bool = Form(default=False),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     history: str = Form(default="[]"),
@@ -2057,15 +2058,28 @@ async def chat(
             f"Use this to give directions, distances, and location-aware answers."
         )
 
-    # Build trip context
+    # Build context
     trip_ctx = ""
-    if trip_id and trip_id in index["trips"]:
+    if bank_mode:
+        # Include all items across all trips + unassigned bank items
+        trip_ctx = "\n\nYou have access to the user's full Travel Bank — all saved items across every trip plus unassigned saves.\n"
+        for trip in index.get("trips", {}).values():
+            trip_ctx += f"\n\n== Trip: {trip['name']} ==\n"
+            for item in trip.get("items", []):
+                if item.get("content"):
+                    trip_ctx += f"\n[{item.get('label') or item.get('type', 'item')}]:\n{item['content'][:500]}\n"
+        bank_items = index.get("bank", [])
+        if bank_items:
+            trip_ctx += "\n\n== Unassigned Bank Items ==\n"
+            for item in bank_items:
+                if item.get("content"):
+                    trip_ctx += f"\n[{item.get('label') or item.get('type', 'item')}]:\n{item['content'][:500]}\n"
+    elif trip_id and trip_id in index["trips"]:
         trip = index["trips"][trip_id]
         trip_ctx = f"\n\nActive trip: '{trip['name']}'"
         if trip.get("itinerary"):
             trip_ctx += f"\n\nOrganized itinerary:\n{trip['itinerary']}"
         else:
-            # Fall back to raw items
             for item in trip["items"]:
                 if item.get("content"):
                     trip_ctx += f"\n\n[{item.get('label') or item.get('type', 'item')}]:\n{item['content']}"
